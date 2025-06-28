@@ -198,6 +198,87 @@ export default function Home() {
     setLastModified({ rules: new Date() });
   };
 
+  // Simple allocation preview function
+  const generateAllocationPreview = () => {
+    if (!clients || !workers || !tasks) return [];
+
+    const allocations: Array<{
+      client: string;
+      task: string;
+      worker: string;
+      score: number;
+      reason: string;
+    }> = [];
+
+    // For each client, try to assign their requested tasks
+    clients.forEach(client => {
+      const requestedTasks = (client.RequestedTaskIDs as string || '').split(',').map((id: string) => id.trim()).filter(Boolean);
+      const priorityLevel = Number(client.PriorityLevel) || 1;
+      
+      requestedTasks.forEach(taskId => {
+        const task = tasks.find(t => t.TaskID === taskId);
+        if (!task) return;
+
+        // Find workers who can do this task
+        const requiredSkills = (task.RequiredSkills as string || '').split(',').map((s: string) => s.trim()).filter(Boolean);
+        const qualifiedWorkers = workers.filter(worker => {
+          const workerSkills = (worker.Skills as string || '').split(',').map((s: string) => s.trim()).filter(Boolean);
+          return requiredSkills.every(skill => workerSkills.includes(skill));
+        });
+
+        if (qualifiedWorkers.length === 0) return;
+
+        // Calculate allocation score for each qualified worker
+        qualifiedWorkers.forEach(worker => {
+          let score = 0;
+          const reasons: string[] = [];
+
+          // Priority Level Weight (1-5 scale, higher is better)
+          const priorityScore = priorityLevel * (weights.priorityLevel / 100);
+          score += priorityScore;
+          reasons.push(`Priority ${priorityLevel} (${priorityScore.toFixed(2)} pts)`);
+
+          // Fairness Weight (prefer workers with less current load)
+          const currentLoad = allocations.filter(a => a.worker === worker.WorkerID).length;
+          const fairnessScore = (1 / (currentLoad + 1)) * (weights.fairness / 100);
+          score += fairnessScore;
+          reasons.push(`Fairness ${fairnessScore.toFixed(2)} pts`);
+
+          // Workload Weight (prefer workers with more available slots)
+          try {
+            const availableSlots = JSON.parse(worker.AvailableSlots as string);
+            const workloadScore = (availableSlots.length / 10) * (weights.workload / 100);
+            score += workloadScore;
+            reasons.push(`Workload ${workloadScore.toFixed(2)} pts`);
+          } catch {
+            reasons.push(`Workload 0 pts (invalid slots)`);
+          }
+
+          // Cost Weight (prefer workers with lower qualification levels = lower cost)
+          const qualificationLevel = Number(worker.QualificationLevel) || 1;
+          const costScore = (1 / qualificationLevel) * (weights.cost / 100);
+          score += costScore;
+          reasons.push(`Cost ${costScore.toFixed(2)} pts`);
+
+          allocations.push({
+            client: client.ClientName as string,
+            task: task.TaskName as string,
+            worker: worker.WorkerName as string,
+            score: score,
+            reason: reasons.join(', ')
+          });
+        });
+      });
+    });
+
+    // Sort by score (highest first) and take top allocations
+    return allocations
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 20); // Show top 20 allocations
+  };
+
+  const allocationPreview = generateAllocationPreview();
+
   const weightItems = [
     { key: 'priorityLevel', label: 'Priority Level Weight', color: 'purple' },
     { key: 'requestedTaskFulfillment', label: 'Requirement Task Fulfillment Weight', color: 'blue' },
@@ -355,6 +436,90 @@ export default function Home() {
             </p>
           </div>
         </div>
+
+        {/* Allocation Preview */}
+        {allocationPreview.length > 0 && (
+          <div className="bg-slate-800/30 backdrop-blur-md rounded-3xl p-8 border border-slate-700/50 shadow-2xl">
+            <div className="flex items-center gap-3 mb-6">
+              <Users className="text-green-400" size={24} />
+              <h3 className="text-2xl font-bold text-white">Allocation Preview</h3>
+              <div className="ml-auto text-sm text-gray-400">
+                Based on current weights • Top {allocationPreview.length} assignments
+              </div>
+            </div>
+            
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-slate-600/50">
+                    <th className="text-left p-3 text-gray-300 font-medium">Client</th>
+                    <th className="text-left p-3 text-gray-300 font-medium">Task</th>
+                    <th className="text-left p-3 text-gray-300 font-medium">Worker</th>
+                    <th className="text-left p-3 text-gray-300 font-medium">Score</th>
+                    <th className="text-left p-3 text-gray-300 font-medium">Reasoning</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {allocationPreview.map((allocation, index) => (
+                    <tr key={index} className="border-b border-slate-600/30 hover:bg-slate-700/20 transition-colors">
+                      <td className="p-3 text-white font-medium">{allocation.client}</td>
+                      <td className="p-3 text-blue-300">{allocation.task}</td>
+                      <td className="p-3 text-green-300">{allocation.worker}</td>
+                      <td className="p-3">
+                        <span className="bg-purple-500/20 text-purple-300 px-2 py-1 rounded-lg font-mono text-sm">
+                          {allocation.score.toFixed(2)}
+                        </span>
+                      </td>
+                      <td className="p-3 text-gray-400 text-xs max-w-md truncate" title={allocation.reason}>
+                        {allocation.reason}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            
+            <div className="mt-6 p-4 bg-green-900/20 border border-green-800/30 rounded-xl">
+              <div className="flex items-center gap-2 mb-2">
+                <CheckCircle className="text-green-400" size={16} />
+                <span className="text-green-300 font-medium">Allocation Algorithm Active</span>
+              </div>
+              <p className="text-gray-300 text-sm">
+                This preview shows how your current weight settings would influence task assignments. 
+                Higher scores indicate better matches based on your prioritization preferences.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* No Allocation Preview */}
+        {(!clients || !workers || !tasks) && (
+          <div className="bg-slate-800/30 backdrop-blur-md rounded-3xl p-8 border border-slate-700/50 shadow-2xl">
+            <div className="flex items-center gap-3 mb-6">
+              <Users className="text-gray-400" size={24} />
+              <h3 className="text-2xl font-bold text-white">Allocation Preview</h3>
+            </div>
+            
+            <div className="text-center py-12">
+              <div className="text-gray-400 mb-4">
+                <Users className="mx-auto mb-4" size={48} />
+                <h4 className="text-lg font-medium mb-2">No Data Available</h4>
+                <p className="text-sm">
+                  Upload clients, workers, and tasks data to see allocation previews based on your weight settings.
+                </p>
+              </div>
+              <div className="flex justify-center gap-4">
+                <div className="text-xs text-gray-500">
+                  <div className="font-medium mb-1">Required:</div>
+                  <div>• Clients with RequestedTaskIDs</div>
+                  <div>• Workers with Skills</div>
+                  <div>• Tasks with RequiredSkills</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Validation Issues */}
         {validationErrors.length > 0 && (
           <div className="bg-slate-800/30 backdrop-blur-md rounded-3xl p-8 border border-slate-700/50 shadow-2xl">
