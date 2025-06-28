@@ -83,6 +83,7 @@ export default function Home() {
   const [modify, setModify] = useState({ clients: '', workers: '', tasks: '' });
   const [filtered, setFiltered] = useState<FilteredState>({ clients: null, workers: null, tasks: null });
   const [ruleSuggestions, setRuleSuggestions] = useState<DataRow[]>([]);
+  const [lastModified, setLastModified] = useState<{ [key: string]: Date }>({});
 
   useEffect(() => {
     setValidationErrors(validateData(clients, workers, tasks));
@@ -132,6 +133,7 @@ export default function Home() {
     if (entity === 'workers') setWorkers(newData);
     if (entity === 'tasks') setTasks(newData);
     setModify(m => ({ ...m, [entity]: '' }));
+    setLastModified({ [entity]: new Date() });
   };
 
   // Memoize columns for performance
@@ -150,14 +152,17 @@ export default function Home() {
     setRules((prev) => [...prev, newRule]);
     setRuleInput("");
     setFreeFormInput("");
+    setLastModified({ rules: new Date() });
   }
 
   function handleRemoveRule(idx: number) {
     setRules((prev) => prev.filter((_, i) => i !== idx));
+    setLastModified({ rules: new Date() });
   }
 
   function handleWeightChange(key: string, value: number) {
     setWeights((prev) => ({ ...prev, [key]: value }));
+    setLastModified({ weights: new Date() });
   }
 
   function exportCSV(data: DataRow[], filename: string) {
@@ -184,11 +189,13 @@ export default function Home() {
       worker: s.worker || ''
     }));
     setRuleSuggestions(dataRowSuggestions);
+    setLastModified({ ruleSuggestions: new Date() });
   };
 
   const handleAddSuggestedRule = (suggestion: DataRow) => {
     setRules(prev => [...prev, suggestion]);
     setRuleSuggestions(s => s.filter(r => r !== suggestion));
+    setLastModified({ rules: new Date() });
   };
 
   const weightItems = [
@@ -426,6 +433,9 @@ export default function Home() {
               </button>
             </div>
             {/* Data Table (Plain MUI DataGrid) */}
+            <div className="mb-2 text-sm text-blue-300">
+              💡 Click on any cell to edit. Changes are automatically saved.
+            </div>
             <div className="overflow-x-auto rounded-2xl border border-indigo-200">
               <DataGrid
                 autoHeight
@@ -434,9 +444,15 @@ export default function Home() {
                 pageSizeOptions={[5, 10, 20]}
                 initialState={{ pagination: { paginationModel: { pageSize: 5 } } }}
                 processRowUpdate={(newRow) => {
-                  const updated = [...(filtered.clients || [])];
-                  updated[newRow.id] = { ...updated[newRow.id], ...newRow };
-                  setClients(updated);
+                  // Find the original row index in the main clients array
+                  const originalIndex = clients?.findIndex(client => client.ClientID === newRow.ClientID);
+                  if (originalIndex !== undefined && originalIndex !== -1 && clients) {
+                    // Update the original clients array
+                    const updatedClients = [...clients];
+                    updatedClients[originalIndex] = { ...updatedClients[originalIndex], ...newRow };
+                    setClients(updatedClients);
+                    setLastModified(prev => ({ ...prev, clients: new Date() }));
+                  }
                   return newRow;
                 }}
               />
@@ -446,6 +462,11 @@ export default function Home() {
               <div className="text-gray-400">
                 Showing {filtered.clients ? filtered.clients.length : 0} of {clients ? clients.length : 0} clients
               </div>
+              {lastModified.clients && (
+                <div className="text-green-400 text-xs">
+                  Last modified: {lastModified.clients.toLocaleTimeString()}
+                </div>
+              )}
             </div>
           </div>
           {/* Workers Data */}
@@ -486,6 +507,9 @@ export default function Home() {
               </button>
             </div>
             {/* Data Table (Plain MUI DataGrid) */}
+            <div className="mb-2 text-sm text-blue-300">
+              💡 Click on any cell to edit. Changes are automatically saved.
+            </div>
             <div className="overflow-x-auto rounded-2xl border border-indigo-200">
               <DataGrid
                 autoHeight
@@ -494,9 +518,15 @@ export default function Home() {
                 pageSizeOptions={[5, 10, 20]}
                 initialState={{ pagination: { paginationModel: { pageSize: 5 } } }}
                 processRowUpdate={(newRow) => {
-                  const updated = [...(filtered.workers || [])];
-                  updated[newRow.id] = { ...updated[newRow.id], ...newRow };
-                  setWorkers(updated);
+                  // Find the original row index in the main workers array
+                  const originalIndex = workers?.findIndex(worker => worker.WorkerID === newRow.WorkerID);
+                  if (originalIndex !== undefined && originalIndex !== -1 && workers) {
+                    // Update the original workers array
+                    const updatedWorkers = [...workers];
+                    updatedWorkers[originalIndex] = { ...updatedWorkers[originalIndex], ...newRow };
+                    setWorkers(updatedWorkers);
+                    setLastModified(prev => ({ ...prev, workers: new Date() }));
+                  }
                   return newRow;
                 }}
               />
@@ -506,6 +536,11 @@ export default function Home() {
               <div className="text-gray-400">
                 Showing {filtered.workers ? filtered.workers.length : 0} of {workers ? workers.length : 0} workers
               </div>
+              {lastModified.workers && (
+                <div className="text-green-400 text-xs">
+                  Last modified: {lastModified.workers.toLocaleTimeString()}
+                </div>
+              )}
             </div>
           </div>
           {/* Tasks Data */}
@@ -546,6 +581,9 @@ export default function Home() {
               </button>
             </div>
             {/* Data Table (Plain MUI DataGrid) */}
+            <div className="mb-2 text-sm text-blue-300">
+              💡 Click on any cell to edit. Changes are automatically saved.
+            </div>
             <div className="overflow-x-auto rounded-2xl border border-indigo-200">
               <DataGrid
                 autoHeight
@@ -554,9 +592,15 @@ export default function Home() {
                 pageSizeOptions={[5, 10, 20]}
                 initialState={{ pagination: { paginationModel: { pageSize: 5 } } }}
                 processRowUpdate={(newRow) => {
-                  const updated = [...(filtered.tasks || [])];
-                  updated[newRow.id] = { ...updated[newRow.id], ...newRow };
-                  setTasks(updated);
+                  // Find the original row index in the main tasks array
+                  const originalIndex = tasks?.findIndex(task => task.TaskID === newRow.TaskID);
+                  if (originalIndex !== undefined && originalIndex !== -1 && tasks) {
+                    // Update the original tasks array
+                    const updatedTasks = [...tasks];
+                    updatedTasks[originalIndex] = { ...updatedTasks[originalIndex], ...newRow };
+                    setTasks(updatedTasks);
+                    setLastModified(prev => ({ ...prev, tasks: new Date() }));
+                  }
                   return newRow;
                 }}
               />
@@ -566,6 +610,11 @@ export default function Home() {
               <div className="text-gray-400">
                 Showing {filtered.tasks ? filtered.tasks.length : 0} of {tasks ? tasks.length : 0} tasks
               </div>
+              {lastModified.tasks && (
+                <div className="text-green-400 text-xs">
+                  Last modified: {lastModified.tasks.toLocaleTimeString()}
+                </div>
+              )}
             </div>
           </div>
         </div>
