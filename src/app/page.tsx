@@ -357,24 +357,23 @@ export default function Home() {
             </div>
             <div className="space-y-4 max-h-80 overflow-y-auto pr-2">
               {validationErrors.map((issue, index) => {
-                const type = issue.message.toLowerCase().includes('error') ? 'error' : 'warning';
-                const getIcon = (type: string) => {
-                  switch (type) {
+                const getIcon = (severity: string) => {
+                  switch (severity) {
                     case 'error': return <XCircle className="text-red-400" size={20} />;
                     case 'warning': return <AlertTriangle className="text-yellow-400" size={20} />;
                     default: return <CheckCircle className="text-green-400" size={20} />;
                   }
                 };
-                const getBackgroundColor = (type: string) => {
-                  switch (type) {
+                const getBackgroundColor = (severity: string) => {
+                  switch (severity) {
                     case 'error': return 'bg-red-500/10 border-red-500/20';
                     case 'warning': return 'bg-yellow-500/10 border-yellow-500/20';
                     default: return 'bg-green-500/10 border-green-500/20';
                   }
                 };
                 return (
-                  <div key={index} className={`flex items-start gap-3 p-4 rounded-xl border ${getBackgroundColor(type)}`}>
-                    {getIcon(type)}
+                  <div key={index} className={`flex items-start gap-3 p-4 rounded-xl border ${getBackgroundColor(issue.severity)}`}>
+                    {getIcon(issue.severity)}
                     <div className="flex-1">
                       <div className="text-white font-medium">{issue.message}</div>
                       <div className="text-gray-400 text-sm mt-1">

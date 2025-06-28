@@ -1,0 +1,7 @@
+WorkerID,WorkerName,Skills,AvailableSlots,MaxLoadPerPhase,WorkerGroup,QualificationLevel
+W1,Alice,Python,"[1,2,3]",2,GroupA,5
+W2,Bob,Java,"[2,3,4]",3,GroupB,4
+W3,Charlie,Python,Java,"[1,2]",1,GroupA,3
+W1,Duplicate,Python,"[1,2,3]",2,GroupA,5
+W4,Malformed,Python,"notjson",2,GroupB,4
+W5,LowSlots,Python,"[1]",3,GroupA,2 

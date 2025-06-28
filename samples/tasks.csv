@@ -1,0 +1,7 @@
+TaskID,TaskName,Category,Duration,RequiredSkills,PreferredPhases,MaxConcurrent
+T1,Analysis,Data,2,Python,"[1,2]",2
+T2,Development,Software,0,Java,"[2,3]",3
+T3,Testing,QA,1,Python,"1-3",2
+T4,Uncovered,Data,1,Go,"[1,2]",1
+T5,Malformed,QA,abc,Python,"notphases",1
+T6,HighConcurrency,Software,1,Python,"[1,2,3]",10 
