@@ -24,3 +24,78 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* Glassmorphic card effect */
+.glass-card {
+  background: rgba(36, 40, 54, 0.7);
+  box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.18);
+  backdrop-filter: blur(16px) saturate(180%);
+  -webkit-backdrop-filter: blur(16px) saturate(180%);
+  border-radius: 1.5rem;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+/* Pill badge */
+.pill {
+  display: inline-block;
+  padding: 0.25em 0.75em;
+  border-radius: 9999px;
+  font-size: 0.85em;
+  font-weight: 600;
+  background: linear-gradient(90deg, #06b6d4 0%, #3b82f6 100%);
+  color: #fff;
+  letter-spacing: 0.02em;
+  box-shadow: 0 1px 4px 0 rgba(0,0,0,0.08);
+}
+
+/* Custom slider track for MUI */
+.MuiSlider-root {
+  color: #06b6d4 !important;
+}
+.MuiSlider-thumb {
+  background: #fff !important;
+  border: 2px solid #06b6d4 !important;
+}
+.MuiSlider-rail {
+  background: #232946 !important;
+}
+.MuiSlider-track {
+  background: linear-gradient(90deg, #06b6d4 0%, #3b82f6 100%) !important;
+}
+
+/* Table header styling */
+.data-table-header {
+  background: rgba(36, 40, 54, 0.95);
+  color: #a5b4fc;
+  font-weight: 700;
+  font-size: 1.05em;
+  letter-spacing: 0.01em;
+}
+
+/* Validation warning */
+.validation-warning {
+  background: linear-gradient(90deg, #fbbf24 0%, #f87171 100%);
+  color: #fff;
+  border-radius: 0.75rem;
+  padding: 0.5em 1em;
+  font-weight: 600;
+  margin-bottom: 0.5em;
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+}
+
+/* Export button large */
+.export-btn {
+  font-size: 1.1em;
+  padding: 1em 1.5em;
+  border-radius: 1em;
+  font-weight: 700;
+  background: linear-gradient(90deg, #06b6d4 0%, #3b82f6 100%);
+  color: #fff;
+  box-shadow: 0 2px 8px 0 rgba(0,0,0,0.10);
+  transition: background 0.2s;
+}
+.export-btn:hover {
+  background: linear-gradient(90deg, #3b82f6 0%, #06b6d4 100%);
+}
