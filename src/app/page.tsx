@@ -1139,7 +1139,7 @@ export default function Home() {
           <div className="bg-white/10 backdrop-blur-md rounded-2xl shadow-xl p-4 border border-white/20 flex flex-col">
             <div className="flex items-center justify-between mb-6">
               <div className="flex items-center gap-3">
-                <FaUserTie className="text-cyan-400" size={24} />
+                <FaUserTie className="text-purple-400" size={24} />
                 <h3 className="text-2xl font-bold text-white">Workers Data</h3>
               </div>
               <div className="text-indigo-400 text-sm">{filtered.workers ? filtered.workers.length : 0} records</div>
@@ -1147,24 +1147,24 @@ export default function Home() {
             {/* Search and Modify Bars */}
             <div className="flex flex-col gap-2 mb-6">
               <input
-                className="w-full pl-4 pr-4 py-3 border rounded-xl text-white placeholder-gray-400 focus:ring-2 focus:ring-cyan-500 focus:border-transparent transition-all duration-200"
+                className="w-full pl-4 pr-4 py-3 border rounded-xl text-white placeholder-gray-400 focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all duration-200"
                 placeholder="Search workers (natural language)"
                 value={search.workers}
                 onChange={e => setSearch(s => ({ ...s, workers: e.target.value }))}
               />
               <div className="flex gap-2">
                 <input
-                  className="w-full pl-4 pr-4 py-3 border rounded-xl text-white placeholder-gray-400 focus:ring-2 focus:ring-cyan-500 focus:border-transparent transition-all duration-200"
+                  className="w-full pl-4 pr-4 py-3 border rounded-xl text-white placeholder-gray-400 focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all duration-200"
                   placeholder="Modify workers (natural language)"
                   value={modify.workers}
                   onChange={e => setModify(m => ({ ...m, workers: e.target.value }))}
                 />
-                <button className="bg-indigo-600 text-white px-4 py-2 rounded-xl" onClick={() => handleModify('workers')}>Apply</button>
+                <button className="bg-purple-600 text-white px-4 py-2 rounded-xl" onClick={() => handleModify('workers')}>Apply</button>
               </div>
             </div>
             {/* Controls */}
             <div className="flex gap-4 mb-6">
-              <button className="px-6 py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl transition-all duration-200 flex items-center gap-2 shadow-lg hover:shadow-indigo-500/25">
+              <button className="px-6 py-3 bg-purple-600 hover:bg-purple-500 text-white rounded-xl transition-all duration-200 flex items-center gap-2 shadow-lg hover:shadow-purple-500/25">
                 <Upload size={20} />
                 <label className="cursor-pointer">
                   <input type="file" accept=".csv,.xlsx" className="hidden" onChange={handleFile(setWorkers, 'workers')} />
@@ -1307,7 +1307,7 @@ export default function Home() {
           <div className="bg-white/10 backdrop-blur-md rounded-2xl shadow-xl p-4 border border-white/20 flex flex-col">
             <div className="flex items-center justify-between mb-6">
               <div className="flex items-center gap-3">
-                <FaTasks className="text-cyan-400" size={24} />
+                <FaTasks className="text-purple-400" size={24} />
                 <h3 className="text-2xl font-bold text-white">Tasks Data</h3>
               </div>
               <div className="text-indigo-400 text-sm">{filtered.tasks ? filtered.tasks.length : 0} records</div>
@@ -1315,24 +1315,24 @@ export default function Home() {
             {/* Search and Modify Bars */}
             <div className="flex flex-col gap-2 mb-6">
               <input
-                className="w-full pl-4 pr-4 py-3 border rounded-xl text-white placeholder-gray-400 focus:ring-2 focus:ring-cyan-500 focus:border-transparent transition-all duration-200"
+                className="w-full pl-4 pr-4 py-3 border rounded-xl text-white placeholder-gray-400 focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all duration-200"
                 placeholder="Search tasks (natural language)"
                 value={search.tasks}
                 onChange={e => setSearch(s => ({ ...s, tasks: e.target.value }))}
               />
               <div className="flex gap-2">
                 <input
-                  className="w-full pl-4 pr-4 py-3 border rounded-xl text-white placeholder-gray-400 focus:ring-2 focus:ring-cyan-500 focus:border-transparent transition-all duration-200"
+                  className="w-full pl-4 pr-4 py-3 border rounded-xl text-white placeholder-gray-400 focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all duration-200"
                   placeholder="Modify tasks (natural language)"
                   value={modify.tasks}
                   onChange={e => setModify(m => ({ ...m, tasks: e.target.value }))}
                 />
-                <button className="bg-indigo-600 text-white px-4 py-2 rounded-xl" onClick={() => handleModify('tasks')}>Apply</button>
+                <button className="bg-purple-600 text-white px-4 py-2 rounded-xl" onClick={() => handleModify('tasks')}>Apply</button>
               </div>
             </div>
             {/* Controls */}
             <div className="flex gap-4 mb-6">
-              <button className="px-6 py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl transition-all duration-200 flex items-center gap-2 shadow-lg hover:shadow-indigo-500/25">
+              <button className="px-6 py-3 bg-purple-600 hover:bg-purple-500 text-white rounded-xl transition-all duration-200 flex items-center gap-2 shadow-lg hover:shadow-purple-500/25">
                 <Upload size={20} />
                 <label className="cursor-pointer">
                   <input type="file" accept=".csv,.xlsx" className="hidden" onChange={handleFile(setTasks, 'tasks')} />
