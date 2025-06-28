@@ -84,8 +84,19 @@ export default function Home() {
   const [filtered, setFiltered] = useState<FilteredState>({ clients: null, workers: null, tasks: null });
   const [ruleSuggestions, setRuleSuggestions] = useState<DataRow[]>([]);
   const [lastModified, setLastModified] = useState<{ [key: string]: Date }>({});
-  const [dataCorrections, setDataCorrections] = useState<{ [key: string]: any[] }>({});
-  const [aiValidationErrors, setAiValidationErrors] = useState<{ [key: string]: any[] }>({});
+  const [dataCorrections, setDataCorrections] = useState<{ [key: string]: Array<{
+    rowIndex: number;
+    column: string;
+    currentValue: string | number | boolean | object;
+    suggestedValue: string | number | boolean | object;
+    reason: string;
+    confidence: number;
+  }> }>({});
+  const [aiValidationErrors, setAiValidationErrors] = useState<{ [key: string]: Array<{
+    field: string;
+    message: string;
+    severity: 'error' | 'warning';
+  }> }>({});
   const [isLoadingAI, setIsLoadingAI] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
 
@@ -144,11 +155,6 @@ export default function Home() {
     setModify(m => ({ ...m, [entity]: '' }));
     setLastModified({ [entity]: new Date() });
   };
-
-  // Memoize columns for performance
-  const clientsColumns = useMemo(() => getColumns(clients || []), [clients]);
-  const workersColumns = useMemo(() => getColumns(workers || []), [workers]);
-  const tasksColumns = useMemo(() => getColumns(tasks || []), [tasks]);
 
   function handleAddRule(e: React.FormEvent) {
     e.preventDefault();

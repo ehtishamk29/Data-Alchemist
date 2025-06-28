@@ -16,7 +16,7 @@ interface ParsedRule {
   type: string;
   description?: string;
   tasks?: string[];
-  parameters?: Record<string, any>;
+  parameters?: Record<string, string | number | boolean>;
 }
 
 interface Context {
@@ -28,8 +28,8 @@ interface Context {
 interface DataCorrection {
   rowIndex: number;
   column: string;
-  currentValue: any;
-  suggestedValue: any;
+  currentValue: string | number | boolean | object;
+  suggestedValue: string | number | boolean | object;
   reason: string;
   confidence: number;
 }
@@ -81,7 +81,8 @@ async function callOpenAI(prompt: string, apiKey: string, systemPrompt?: string)
       } else if (response.status >= 500) {
         throw new Error('OpenAI service is temporarily unavailable. Please try again later.');
       } else {
-        throw new Error(`OpenAI API error: ${response.status} - ${errorData.error?.message || 'Unknown error'}`);
+        const errorMessage = (errorData as { error?: { message?: string } }).error?.message || 'Unknown error';
+        throw new Error(`OpenAI API error: ${response.status} - ${errorMessage}`);
       }
     }
 
