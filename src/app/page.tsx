@@ -63,7 +63,7 @@ type FilteredState = {
 };
 
 export default function Home() {
-  const [apiKey] = useState("");
+  const [apiKey, setApiKey] = useState("");
   const [clients, setClients] = useState<DataRow[] | null>(null);
   const [workers, setWorkers] = useState<DataRow[] | null>(null);
   const [tasks, setTasks] = useState<DataRow[] | null>(null);
@@ -84,6 +84,9 @@ export default function Home() {
   const [filtered, setFiltered] = useState<FilteredState>({ clients: null, workers: null, tasks: null });
   const [ruleSuggestions, setRuleSuggestions] = useState<DataRow[]>([]);
   const [lastModified, setLastModified] = useState<{ [key: string]: Date }>({});
+  const [dataCorrections, setDataCorrections] = useState<{ [key: string]: any[] }>({});
+  const [aiValidationErrors, setAiValidationErrors] = useState<{ [key: string]: any[] }>({});
+  const [isLoadingAI, setIsLoadingAI] = useState(false);
 
   useEffect(() => {
     setValidationErrors(validateData(clients, workers, tasks));
@@ -196,6 +199,113 @@ export default function Home() {
     setRules(prev => [...prev, suggestion]);
     setRuleSuggestions(s => s.filter(r => r !== suggestion));
     setLastModified({ rules: new Date() });
+  };
+
+  // AI Data Correction Functions
+  const handleGetDataCorrections = async (entity: 'clients' | 'workers' | 'tasks') => {
+    if (!apiKey) {
+      alert('Please enter your OpenAI API key to use AI features');
+      return;
+    }
+    
+    setIsLoadingAI(true);
+    try {
+      const data = entity === 'clients' ? clients : entity === 'workers' ? workers : tasks;
+      if (!data) return;
+      
+      const corrections = await aiService.suggestDataCorrections(data, entity, apiKey);
+      setDataCorrections(prev => ({ ...prev, [entity]: corrections }));
+      setLastModified({ [`corrections_${entity}`]: new Date() });
+    } catch (error) {
+      console.error('Failed to get data corrections:', error);
+      alert('Failed to get AI data corrections. Please check your API key and try again.');
+    } finally {
+      setIsLoadingAI(false);
+    }
+  };
+
+  const handleApplyCorrection = (entity: 'clients' | 'workers' | 'tasks', correction: any) => {
+    const data = entity === 'clients' ? clients : entity === 'workers' ? workers : tasks;
+    if (!data) return;
+    
+    const newData = [...data];
+    if (newData[correction.rowIndex]) {
+      newData[correction.rowIndex] = { ...newData[correction.rowIndex], [correction.column]: correction.suggestedValue };
+      
+      if (entity === 'clients') setClients(newData);
+      if (entity === 'workers') setWorkers(newData);
+      if (entity === 'tasks') setTasks(newData);
+      
+      // Remove the applied correction
+      setDataCorrections(prev => ({
+        ...prev,
+        [entity]: prev[entity]?.filter(c => c !== correction) || []
+      }));
+      
+      setLastModified({ [entity]: new Date() });
+    }
+  };
+
+  // AI Validation Functions
+  const handleRunAIValidation = async (entity: 'clients' | 'workers' | 'tasks') => {
+    if (!apiKey) {
+      alert('Please enter your OpenAI API key to use AI features');
+      return;
+    }
+    
+    setIsLoadingAI(true);
+    try {
+      const data = entity === 'clients' ? clients : entity === 'workers' ? workers : tasks;
+      if (!data) return;
+      
+      const aiErrors = await aiService.validateDataWithAI(data, entity, apiKey);
+      setAiValidationErrors(prev => ({ ...prev, [entity]: aiErrors }));
+      setLastModified({ [`aiValidation_${entity}`]: new Date() });
+    } catch (error) {
+      console.error('Failed to run AI validation:', error);
+      alert('Failed to run AI validation. Please check your API key and try again.');
+    } finally {
+      setIsLoadingAI(false);
+    }
+  };
+
+  // Natural Language Rule Parsing
+  const handleParseNaturalLanguageRule = async () => {
+    if (!apiKey) {
+      alert('Please enter your OpenAI API key to use AI features');
+      return;
+    }
+    
+    if (!freeFormInput.trim()) {
+      alert('Please enter a natural language rule');
+      return;
+    }
+    
+    setIsLoadingAI(true);
+    try {
+      const parsedRule = await aiService.parseRule(freeFormInput, { clients, workers, tasks }, apiKey);
+      
+      // Add the parsed rule to the rules list
+      const newRule: DataRow = {
+        type: parsedRule.type,
+        description: parsedRule.description || freeFormInput,
+        tasks: parsedRule.tasks || [],
+        parameters: parsedRule.parameters || {},
+        created: new Date().toISOString(),
+        aiParsed: true
+      };
+      
+      setRules(prev => [...prev, newRule]);
+      setFreeFormInput("");
+      setLastModified({ rules: new Date() });
+      
+      alert(`Rule parsed successfully! Type: ${parsedRule.type}`);
+    } catch (error) {
+      console.error('Failed to parse rule:', error);
+      alert('Failed to parse natural language rule. Please check your API key and try again.');
+    } finally {
+      setIsLoadingAI(false);
+    }
   };
 
   // Simple allocation preview function
@@ -383,6 +493,47 @@ export default function Home() {
         <h1 className="text-4xl sm:text-5xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-300 drop-shadow-lg">Data <span className="text-blue-400">Alchemist</span></h1>
         <p className="text-lg text-blue-200 text-center max-w-2xl">Forge Your Own AI Resource Allocation Configurator</p>
       </header>
+      
+      {/* OpenAI API Key Input */}
+      <div className="w-full max-w-6xl bg-slate-800/30 backdrop-blur-md rounded-3xl p-6 border border-slate-700/50 shadow-2xl mb-8">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="w-8 h-8 bg-gradient-to-r from-green-400 to-blue-500 rounded-lg flex items-center justify-center">
+            <span className="text-white font-bold text-sm">AI</span>
+          </div>
+          <h3 className="text-xl font-bold text-white">AI Features Configuration</h3>
+        </div>
+        <div className="space-y-4">
+          <div>
+            <label className="block text-gray-300 text-sm font-medium mb-2">OpenAI API Key</label>
+            <input
+              type="password"
+              value={apiKey}
+              onChange={e => setApiKey(e.target.value)}
+              placeholder="sk-... (Enter your OpenAI API key to enable AI features)"
+              className="w-full p-3 bg-slate-700/50 border border-slate-600/50 rounded-xl text-white placeholder-gray-400 focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all duration-200"
+            />
+            <p className="text-gray-400 text-xs mt-1">
+              💡 Your API key is stored locally and never sent to our servers. AI features include header mapping, natural language search, rule parsing, and data corrections.
+            </p>
+          </div>
+          
+          {/* AI Status */}
+          <div className="flex items-center gap-4">
+            <div className={`flex items-center gap-2 px-3 py-2 rounded-lg ${apiKey ? 'bg-green-500/20 border border-green-500/30' : 'bg-gray-500/20 border border-gray-500/30'}`}>
+              <div className={`w-2 h-2 rounded-full ${apiKey ? 'bg-green-400' : 'bg-gray-400'}`}></div>
+              <span className={`text-sm font-medium ${apiKey ? 'text-green-300' : 'text-gray-400'}`}>
+                {apiKey ? 'AI Features Enabled' : 'AI Features Disabled'}
+              </span>
+            </div>
+            {isLoadingAI && (
+              <div className="flex items-center gap-2 px-3 py-2 bg-blue-500/20 border border-blue-500/30 rounded-lg">
+                <div className="w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin"></div>
+                <span className="text-sm font-medium text-blue-300">Processing...</span>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
       <section className="w-full max-w-6xl flex flex-col gap-8">
         {/* Rule Builder */}
         <div className="bg-slate-800/30 backdrop-blur-md rounded-3xl p-8 border border-slate-700/50 shadow-2xl mb-8">
@@ -457,10 +608,20 @@ export default function Home() {
                 <Plus size={20} />
                 Add Rule
               </button>
+              {ruleType === "freeForm" && (
+                <button
+                  onClick={handleParseNaturalLanguageRule}
+                  disabled={!apiKey || !freeFormInput.trim() || isLoadingAI}
+                  className="flex items-center gap-2 px-6 py-3 bg-green-600 hover:bg-green-500 text-white rounded-xl font-medium transition-all duration-200 shadow-lg hover:shadow-green-500/25 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" style={{ display: isLoadingAI ? 'block' : 'none' }}></div>
+                  <span>🤖 Parse with AI</span>
+                </button>
+              )}
               <button
                 onClick={handleGetRuleSuggestions}
-                className="px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-medium transition-all duration-200 shadow-lg hover:shadow-blue-500/25"
-                disabled={!clients && !workers && !tasks}
+                disabled={!apiKey || (!clients && !workers && !tasks) || isLoadingAI}
+                className="px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-medium transition-all duration-200 shadow-lg hover:shadow-blue-500/25 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Get AI Rule Recommendations
               </button>
@@ -686,7 +847,79 @@ export default function Home() {
                   Upload CSV
                 </label>
               </button>
+              {clients && clients.length > 0 && (
+                <>
+                  <button 
+                    onClick={() => handleGetDataCorrections('clients')}
+                    disabled={!apiKey || isLoadingAI}
+                    className="px-6 py-3 bg-green-600 hover:bg-green-500 text-white rounded-xl transition-all duration-200 flex items-center gap-2 shadow-lg hover:shadow-green-500/25 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" style={{ display: isLoadingAI ? 'block' : 'none' }}></div>
+                    <span>🤖 AI Corrections</span>
+                  </button>
+                  <button 
+                    onClick={() => handleRunAIValidation('clients')}
+                    disabled={!apiKey || isLoadingAI}
+                    className="px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl transition-all duration-200 flex items-center gap-2 shadow-lg hover:shadow-blue-500/25 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" style={{ display: isLoadingAI ? 'block' : 'none' }}></div>
+                    <span>🔍 AI Validation</span>
+                  </button>
+                  <button 
+                    onClick={() => exportCSV(clients, 'clients.csv')}
+                    className="px-6 py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl transition-all duration-200 flex items-center gap-2 shadow-lg hover:shadow-indigo-500/25"
+                  >
+                    <Download size={20} />
+                    Export CSV
+                  </button>
+                </>
+              )}
             </div>
+            
+            {/* AI Data Corrections */}
+            {dataCorrections.clients && dataCorrections.clients.length > 0 && (
+              <div className="mb-6 p-4 bg-green-900/20 border border-green-800/30 rounded-xl">
+                <h4 className="text-green-300 font-medium mb-3 flex items-center gap-2">
+                  <span>🤖</span> AI Suggested Corrections ({dataCorrections.clients.length})
+                </h4>
+                <div className="space-y-2 max-h-40 overflow-y-auto">
+                  {dataCorrections.clients.map((correction, idx) => (
+                    <div key={idx} className="flex items-center justify-between p-3 bg-green-800/20 rounded-lg">
+                      <div className="flex-1">
+                        <div className="text-white text-sm">
+                          Row {correction.rowIndex + 1}, {correction.column}: {String(correction.currentValue)} → {String(correction.suggestedValue)}
+                        </div>
+                        <div className="text-green-300 text-xs mt-1">{correction.reason}</div>
+                      </div>
+                      <button
+                        onClick={() => handleApplyCorrection('clients', correction)}
+                        className="ml-3 px-3 py-1 bg-green-600 hover:bg-green-500 text-white text-xs rounded-lg transition-colors"
+                      >
+                        Apply
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            
+            {/* AI Validation Errors */}
+            {aiValidationErrors.clients && aiValidationErrors.clients.length > 0 && (
+              <div className="mb-6 p-4 bg-blue-900/20 border border-blue-800/30 rounded-xl">
+                <h4 className="text-blue-300 font-medium mb-3 flex items-center gap-2">
+                  <span>🔍</span> AI Validation Issues ({aiValidationErrors.clients.length})
+                </h4>
+                <div className="space-y-2 max-h-40 overflow-y-auto">
+                  {aiValidationErrors.clients.map((error, idx) => (
+                    <div key={idx} className={`p-3 rounded-lg ${error.severity === 'error' ? 'bg-red-800/20 border border-red-800/30' : 'bg-yellow-800/20 border border-yellow-800/30'}`}>
+                      <div className={`text-sm ${error.severity === 'error' ? 'text-red-300' : 'text-yellow-300'}`}>
+                        {error.field}: {error.message}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
             {/* Data Table (Plain MUI DataGrid) */}
             <div className="mb-2 text-sm text-blue-300">
               💡 Click on any cell to edit. Changes are automatically saved.
@@ -782,7 +1015,79 @@ export default function Home() {
                   Upload CSV
                 </label>
               </button>
+              {workers && workers.length > 0 && (
+                <>
+                  <button 
+                    onClick={() => handleGetDataCorrections('workers')}
+                    disabled={!apiKey || isLoadingAI}
+                    className="px-6 py-3 bg-green-600 hover:bg-green-500 text-white rounded-xl transition-all duration-200 flex items-center gap-2 shadow-lg hover:shadow-green-500/25 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" style={{ display: isLoadingAI ? 'block' : 'none' }}></div>
+                    <span>🤖 AI Corrections</span>
+                  </button>
+                  <button 
+                    onClick={() => handleRunAIValidation('workers')}
+                    disabled={!apiKey || isLoadingAI}
+                    className="px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl transition-all duration-200 flex items-center gap-2 shadow-lg hover:shadow-blue-500/25 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" style={{ display: isLoadingAI ? 'block' : 'none' }}></div>
+                    <span>🔍 AI Validation</span>
+                  </button>
+                  <button 
+                    onClick={() => exportCSV(workers, 'workers.csv')}
+                    className="px-6 py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl transition-all duration-200 flex items-center gap-2 shadow-lg hover:shadow-indigo-500/25"
+                  >
+                    <Download size={20} />
+                    Export CSV
+                  </button>
+                </>
+              )}
             </div>
+            
+            {/* AI Data Corrections */}
+            {dataCorrections.workers && dataCorrections.workers.length > 0 && (
+              <div className="mb-6 p-4 bg-green-900/20 border border-green-800/30 rounded-xl">
+                <h4 className="text-green-300 font-medium mb-3 flex items-center gap-2">
+                  <span>🤖</span> AI Suggested Corrections ({dataCorrections.workers.length})
+                </h4>
+                <div className="space-y-2 max-h-40 overflow-y-auto">
+                  {dataCorrections.workers.map((correction, idx) => (
+                    <div key={idx} className="flex items-center justify-between p-3 bg-green-800/20 rounded-lg">
+                      <div className="flex-1">
+                        <div className="text-white text-sm">
+                          Row {correction.rowIndex + 1}, {correction.column}: {String(correction.currentValue)} → {String(correction.suggestedValue)}
+                        </div>
+                        <div className="text-green-300 text-xs mt-1">{correction.reason}</div>
+                      </div>
+                      <button
+                        onClick={() => handleApplyCorrection('workers', correction)}
+                        className="ml-3 px-3 py-1 bg-green-600 hover:bg-green-500 text-white text-xs rounded-lg transition-colors"
+                      >
+                        Apply
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            
+            {/* AI Validation Errors */}
+            {aiValidationErrors.workers && aiValidationErrors.workers.length > 0 && (
+              <div className="mb-6 p-4 bg-blue-900/20 border border-blue-800/30 rounded-xl">
+                <h4 className="text-blue-300 font-medium mb-3 flex items-center gap-2">
+                  <span>🔍</span> AI Validation Issues ({aiValidationErrors.workers.length})
+                </h4>
+                <div className="space-y-2 max-h-40 overflow-y-auto">
+                  {aiValidationErrors.workers.map((error, idx) => (
+                    <div key={idx} className={`p-3 rounded-lg ${error.severity === 'error' ? 'bg-red-800/20 border border-red-800/30' : 'bg-yellow-800/20 border border-yellow-800/30'}`}>
+                      <div className={`text-sm ${error.severity === 'error' ? 'text-red-300' : 'text-yellow-300'}`}>
+                        {error.field}: {error.message}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
             {/* Data Table (Plain MUI DataGrid) */}
             <div className="mb-2 text-sm text-blue-300">
               💡 Click on any cell to edit. Changes are automatically saved.
@@ -878,7 +1183,79 @@ export default function Home() {
                   Upload CSV
                 </label>
               </button>
+              {tasks && tasks.length > 0 && (
+                <>
+                  <button 
+                    onClick={() => handleGetDataCorrections('tasks')}
+                    disabled={!apiKey || isLoadingAI}
+                    className="px-6 py-3 bg-green-600 hover:bg-green-500 text-white rounded-xl transition-all duration-200 flex items-center gap-2 shadow-lg hover:shadow-green-500/25 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" style={{ display: isLoadingAI ? 'block' : 'none' }}></div>
+                    <span>🤖 AI Corrections</span>
+                  </button>
+                  <button 
+                    onClick={() => handleRunAIValidation('tasks')}
+                    disabled={!apiKey || isLoadingAI}
+                    className="px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl transition-all duration-200 flex items-center gap-2 shadow-lg hover:shadow-blue-500/25 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" style={{ display: isLoadingAI ? 'block' : 'none' }}></div>
+                    <span>🔍 AI Validation</span>
+                  </button>
+                  <button 
+                    onClick={() => exportCSV(tasks, 'tasks.csv')}
+                    className="px-6 py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl transition-all duration-200 flex items-center gap-2 shadow-lg hover:shadow-indigo-500/25"
+                  >
+                    <Download size={20} />
+                    Export CSV
+                  </button>
+                </>
+              )}
             </div>
+            
+            {/* AI Data Corrections */}
+            {dataCorrections.tasks && dataCorrections.tasks.length > 0 && (
+              <div className="mb-6 p-4 bg-green-900/20 border border-green-800/30 rounded-xl">
+                <h4 className="text-green-300 font-medium mb-3 flex items-center gap-2">
+                  <span>🤖</span> AI Suggested Corrections ({dataCorrections.tasks.length})
+                </h4>
+                <div className="space-y-2 max-h-40 overflow-y-auto">
+                  {dataCorrections.tasks.map((correction, idx) => (
+                    <div key={idx} className="flex items-center justify-between p-3 bg-green-800/20 rounded-lg">
+                      <div className="flex-1">
+                        <div className="text-white text-sm">
+                          Row {correction.rowIndex + 1}, {correction.column}: {String(correction.currentValue)} → {String(correction.suggestedValue)}
+                        </div>
+                        <div className="text-green-300 text-xs mt-1">{correction.reason}</div>
+                      </div>
+                      <button
+                        onClick={() => handleApplyCorrection('tasks', correction)}
+                        className="ml-3 px-3 py-1 bg-green-600 hover:bg-green-500 text-white text-xs rounded-lg transition-colors"
+                      >
+                        Apply
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            
+            {/* AI Validation Errors */}
+            {aiValidationErrors.tasks && aiValidationErrors.tasks.length > 0 && (
+              <div className="mb-6 p-4 bg-blue-900/20 border border-blue-800/30 rounded-xl">
+                <h4 className="text-blue-300 font-medium mb-3 flex items-center gap-2">
+                  <span>🔍</span> AI Validation Issues ({aiValidationErrors.tasks.length})
+                </h4>
+                <div className="space-y-2 max-h-40 overflow-y-auto">
+                  {aiValidationErrors.tasks.map((error, idx) => (
+                    <div key={idx} className={`p-3 rounded-lg ${error.severity === 'error' ? 'bg-red-800/20 border border-red-800/30' : 'bg-yellow-800/20 border border-yellow-800/30'}`}>
+                      <div className={`text-sm ${error.severity === 'error' ? 'text-red-300' : 'text-yellow-300'}`}>
+                        {error.field}: {error.message}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
             {/* Data Table (Plain MUI DataGrid) */}
             <div className="mb-2 text-sm text-blue-300">
               💡 Click on any cell to edit. Changes are automatically saved.
