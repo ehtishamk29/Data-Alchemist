@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect, useCallback } from "react";
+import { useState, useMemo, useEffect } from "react";
 import * as XLSX from "xlsx";
 import Papa from "papaparse";
 import { DataGrid, GridColDef, GridRowsProp } from "@mui/x-data-grid";
@@ -49,10 +49,6 @@ function getColumns(data: DataRow[]): GridColDef[] {
   }));
 }
 
-function getRows(data: DataRow[]): GridRowsProp {
-  return data.map((row, i) => ({ id: i, ...row }));
-}
-
 // Helper to add id property for DataGrid
 function withRowId(data: DataRow[] | null, entity: 'clients' | 'workers' | 'tasks') {
   if (!data) return [];
@@ -86,7 +82,6 @@ export default function Home() {
   const [search, setSearch] = useState({ clients: '', workers: '', tasks: '' });
   const [modify, setModify] = useState({ clients: '', workers: '', tasks: '' });
   const [filtered, setFiltered] = useState<FilteredState>({ clients: null, workers: null, tasks: null });
-  const [parsedRule, setParsedRule] = useState<DataRow | null>(null);
   const [ruleSuggestions, setRuleSuggestions] = useState<DataRow[]>([]);
 
   useEffect(() => {
