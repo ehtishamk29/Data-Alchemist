@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import * as XLSX from "xlsx";
 import Papa from "papaparse";
 import { DataGrid, GridColDef, GridRowsProp } from "@mui/x-data-grid";
@@ -87,7 +87,7 @@ export default function Home() {
   const [modify, setModify] = useState({ clients: '', workers: '', tasks: '' });
   const [filtered, setFiltered] = useState<FilteredState>({ clients: null, workers: null, tasks: null });
   const [parsedRule, setParsedRule] = useState<DataRow | null>(null);
-  const [ruleSuggestions, setRuleSuggestions] = useState<any[]>([]);
+  const [ruleSuggestions, setRuleSuggestions] = useState<DataRow[]>([]);
 
   useEffect(() => {
     setValidationErrors(validateData(clients, workers, tasks));
@@ -144,53 +144,6 @@ export default function Home() {
   const workersColumns = useMemo(() => getColumns(workers || []), [workers]);
   const tasksColumns = useMemo(() => getColumns(tasks || []), [tasks]);
 
-  // Helper to check if a cell has an error
-  function cellHasError(entity: 'clients' | 'workers' | 'tasks', rowIndex: number, field: string) {
-    return validationErrors.some(
-      (err) => err.entity === entity && err.rowIndex === rowIndex && err.column === field
-    );
-  }
-
-  // Helper to get error message for a cell
-  function cellErrorMessage(entity: 'clients' | 'workers' | 'tasks', rowIndex: number, field: string) {
-    const err = validationErrors.find(
-      (err) => err.entity === entity && err.rowIndex === rowIndex && err.column === field
-    );
-    return err ? err.message : undefined;
-  }
-
-  // Add getCellClassName and renderCell to columns for error highlighting
-  function enhanceColumns(columns: GridColDef[], entity: 'clients' | 'workers' | 'tasks', data: DataRow[] | null) {
-    return columns.map((col) => ({
-      ...col,
-      getCellClassName: (params: { id: number; field: string }) =>
-        cellHasError(entity, params.id, col.field)
-          ? "bg-red-100 text-red-700 font-semibold"
-          : "",
-      renderCell: (params: { value: unknown; id: number; field: string }) => {
-        let displayValue: string = '';
-        if (typeof params.value === 'object' && params.value !== null) {
-          displayValue = JSON.stringify(params.value);
-        } else if (params.value !== undefined && params.value !== null) {
-          displayValue = String(params.value);
-        }
-        const error = cellErrorMessage(entity, params.id, col.field);
-        return (
-          <div>
-            {displayValue}
-            {error && (
-              <span className="block text-xs text-red-600 font-semibold">{error}</span>
-            )}
-          </div>
-        );
-      },
-    }));
-  }
-
-  const clientsColumnsEnhanced = useMemo(() => enhanceColumns(clientsColumns, 'clients', clients), [clientsColumns, clients, validationErrors]);
-  const workersColumnsEnhanced = useMemo(() => enhanceColumns(workersColumns, 'workers', workers), [workersColumns, workers, validationErrors]);
-  const tasksColumnsEnhanced = useMemo(() => enhanceColumns(tasksColumns, 'tasks', tasks), [tasksColumns, tasks, validationErrors]);
-
   function handleAddRule(e: React.FormEvent) {
     e.preventDefault();
     const newRule: DataRow = { type: ruleType, created: new Date().toISOString() };
@@ -228,7 +181,14 @@ export default function Home() {
 
   const handleGetRuleSuggestions = async () => {
     const suggestions = await aiService.aiRuleRecommendations(clients, workers, tasks, apiKey);
-    setRuleSuggestions(suggestions);
+    // Convert RuleSuggestion to DataRow for compatibility
+    const dataRowSuggestions: DataRow[] = suggestions.map(s => ({
+      type: s.type,
+      description: s.reason,
+      tasks: s.tasks || [],
+      worker: s.worker || ''
+    }));
+    setRuleSuggestions(dataRowSuggestions);
   };
 
   const handleAddSuggestedRule = (suggestion: DataRow) => {
@@ -303,7 +263,7 @@ export default function Home() {
                 ) : (
                   rules.map((rule, idx) => (
                     <div key={idx} className="flex items-center gap-3 p-4 bg-slate-700/30 rounded-xl border border-slate-600/30">
-                      <span className="text-white font-medium flex-1">{rule.type === "freeForm" ? rule.description : `${rule.type}: ${rule.input}`}</span>
+                      <span className="text-white font-medium flex-1">{rule.type === "freeForm" ? String(rule.description || '') : `${rule.type}: ${String(rule.input || '')}`}</span>
                       <button
                         onClick={() => handleRemoveRule(idx)}
                         className="p-2 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-lg transition-all duration-200"
@@ -339,17 +299,11 @@ export default function Home() {
                 <ul className="space-y-1">
                   {ruleSuggestions.map((sug, idx) => (
                     <li key={idx} className="flex items-center gap-2">
-                      <span className="font-mono text-blue-200">{sug.type}: {sug.reason}</span>
+                      <span className="font-mono text-blue-200">{String(sug.type || '')}: {String(sug.description || '')}</span>
                       <button className="ml-auto text-green-400 hover:text-green-600 font-bold" onClick={() => handleAddSuggestedRule(sug)} type="button">Add</button>
                     </li>
                   ))}
                 </ul>
-              </div>
-            )}
-            {/* Rule Preview for freeForm */}
-            {ruleType === 'freeForm' && parsedRule && (
-              <div className="bg-green-50 border border-green-200 rounded p-2 mt-2">
-                <span className="text-green-700 font-mono">Parsed Rule Preview: {JSON.stringify(parsedRule)}</span>
               </div>
             )}
           </div>
@@ -424,207 +378,204 @@ export default function Home() {
                   }
                 };
                 return (
-                  <div key={index} className={`p-4 rounded-xl border ${getBackgroundColor(type)}`}>
-                    <div className="flex items-start gap-3">
-                      {getIcon(type)}
-                      <div className="flex-1">
-                        <p className="text-white font-medium">{issue.message}</p>
-                        <p className="text-gray-400 text-sm mt-1">{issue.column ? `Code: ${issue.column}` : ''}</p>
+                  <div key={index} className={`flex items-start gap-3 p-4 rounded-xl border ${getBackgroundColor(type)}`}>
+                    {getIcon(type)}
+                    <div className="flex-1">
+                      <div className="text-white font-medium">{issue.message}</div>
+                      <div className="text-gray-400 text-sm mt-1">
+                        {issue.entity} {issue.rowIndex !== null ? `(Row ${issue.rowIndex + 1})` : ''} {issue.column ? `- ${issue.column}` : ''}
                       </div>
                     </div>
                   </div>
                 );
               })}
             </div>
-            <div className="mt-6 p-4 bg-slate-700/30 rounded-xl border border-slate-600/30">
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-gray-300">
-                  <strong>Summary:</strong> {validationErrors.filter(i => i.message.toLowerCase().includes('error')).length} errors, {validationErrors.filter(i => !i.message.toLowerCase().includes('error')).length} warnings
-                </span>
+          </div>
+        )}
+        {/* Data Tables */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-8">
+          {/* Clients Data */}
+          <div className="bg-white/10 backdrop-blur-md rounded-2xl shadow-xl p-4 border border-white/20 flex flex-col">
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-3">
+                <Users className="text-purple-400" size={24} />
+                <h3 className="text-2xl font-bold text-white">Clients Data</h3>
+              </div>
+              <div className="text-indigo-400 text-sm">{filtered.clients ? filtered.clients.length : 0} records</div>
+            </div>
+            {/* Search and Modify Bars */}
+            <div className="flex flex-col gap-2 mb-6">
+              <input
+                className="w-full pl-4 pr-4 py-3 border rounded-xl text-white placeholder-gray-400 focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all duration-200"
+                placeholder="Search clients (natural language)"
+                value={search.clients}
+                onChange={e => setSearch(s => ({ ...s, clients: e.target.value }))}
+              />
+              <div className="flex gap-2">
+                <input
+                  className="w-full pl-4 pr-4 py-3 border rounded-xl text-white placeholder-gray-400 focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all duration-200"
+                  placeholder="Modify clients (natural language)"
+                  value={modify.clients}
+                  onChange={e => setModify(m => ({ ...m, clients: e.target.value }))}
+                />
+                <button className="bg-purple-600 text-white px-4 py-2 rounded-xl" onClick={() => handleModify('clients')}>Apply</button>
+              </div>
+            </div>
+            {/* Controls */}
+            <div className="flex gap-4 mb-6">
+              <button className="px-6 py-3 bg-purple-600 hover:bg-purple-500 text-white rounded-xl transition-all duration-200 flex items-center gap-2 shadow-lg hover:shadow-purple-500/25">
+                <Upload size={20} />
+                <label className="cursor-pointer">
+                  <input type="file" accept=".csv,.xlsx" className="hidden" onChange={handleFile(setClients, 'clients')} />
+                  Upload CSV
+                </label>
+              </button>
+            </div>
+            {/* Data Table (Plain MUI DataGrid) */}
+            <div className="overflow-x-auto rounded-2xl border border-indigo-200">
+              <DataGrid
+                autoHeight
+                rows={withRowId(filtered.clients, 'clients')}
+                columns={clientsColumns}
+                pageSizeOptions={[5, 10, 20]}
+                initialState={{ pagination: { paginationModel: { pageSize: 5 } } }}
+                processRowUpdate={(newRow) => {
+                  const updated = [...(filtered.clients || [])];
+                  updated[newRow.id] = { ...updated[newRow.id], ...newRow };
+                  setClients(updated);
+                  return newRow;
+                }}
+              />
+            </div>
+            {/* Summary */}
+            <div className="mt-6 flex justify-between items-center text-sm">
+              <div className="text-gray-400">
+                Showing {filtered.clients ? filtered.clients.length : 0} of {clients ? clients.length : 0} clients
               </div>
             </div>
           </div>
-        )}
-        {/* Clients Data Section */}
-        <div className="bg-white/10 backdrop-blur-md rounded-2xl shadow-xl p-4 border border-white/20 flex flex-col mt-8">
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center gap-3">
-              <Users className="text-cyan-400" size={24} />
-              <h3 className="text-2xl font-bold text-white">Clients Data</h3>
+          {/* Workers Data */}
+          <div className="bg-white/10 backdrop-blur-md rounded-2xl shadow-xl p-4 border border-white/20 flex flex-col">
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-3">
+                <FaUserTie className="text-cyan-400" size={24} />
+                <h3 className="text-2xl font-bold text-white">Workers Data</h3>
+              </div>
+              <div className="text-indigo-400 text-sm">{filtered.workers ? filtered.workers.length : 0} records</div>
             </div>
-            <div className="text-indigo-400 text-sm">{filtered.clients ? filtered.clients.length : 0} records</div>
-          </div>
-          {/* Search and Modify Bars */}
-          <div className="flex flex-col gap-2 mb-6">
-            <input
-              className="w-full pl-4 pr-4 py-3 border rounded-xl text-white placeholder-gray-400 focus:ring-2 focus:ring-cyan-500 focus:border-transparent transition-all duration-200"
-              placeholder="Search clients (natural language)"
-              value={search.clients}
-              onChange={e => setSearch(s => ({ ...s, clients: e.target.value }))}
-            />
-            <div className="flex gap-2">
+            {/* Search and Modify Bars */}
+            <div className="flex flex-col gap-2 mb-6">
               <input
                 className="w-full pl-4 pr-4 py-3 border rounded-xl text-white placeholder-gray-400 focus:ring-2 focus:ring-cyan-500 focus:border-transparent transition-all duration-200"
-                placeholder="Modify clients (natural language)"
-                value={modify.clients}
-                onChange={e => setModify(m => ({ ...m, clients: e.target.value }))}
+                placeholder="Search workers (natural language)"
+                value={search.workers}
+                onChange={e => setSearch(s => ({ ...s, workers: e.target.value }))}
               />
-              <button className="bg-indigo-600 text-white px-4 py-2 rounded-xl" onClick={() => handleModify('clients')}>Apply</button>
+              <div className="flex gap-2">
+                <input
+                  className="w-full pl-4 pr-4 py-3 border rounded-xl text-white placeholder-gray-400 focus:ring-2 focus:ring-cyan-500 focus:border-transparent transition-all duration-200"
+                  placeholder="Modify workers (natural language)"
+                  value={modify.workers}
+                  onChange={e => setModify(m => ({ ...m, workers: e.target.value }))}
+                />
+                <button className="bg-indigo-600 text-white px-4 py-2 rounded-xl" onClick={() => handleModify('workers')}>Apply</button>
+              </div>
+            </div>
+            {/* Controls */}
+            <div className="flex gap-4 mb-6">
+              <button className="px-6 py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl transition-all duration-200 flex items-center gap-2 shadow-lg hover:shadow-indigo-500/25">
+                <Upload size={20} />
+                <label className="cursor-pointer">
+                  <input type="file" accept=".csv,.xlsx" className="hidden" onChange={handleFile(setWorkers, 'workers')} />
+                  Upload CSV
+                </label>
+              </button>
+            </div>
+            {/* Data Table (Plain MUI DataGrid) */}
+            <div className="overflow-x-auto rounded-2xl border border-indigo-200">
+              <DataGrid
+                autoHeight
+                rows={withRowId(filtered.workers, 'workers')}
+                columns={workersColumns}
+                pageSizeOptions={[5, 10, 20]}
+                initialState={{ pagination: { paginationModel: { pageSize: 5 } } }}
+                processRowUpdate={(newRow) => {
+                  const updated = [...(filtered.workers || [])];
+                  updated[newRow.id] = { ...updated[newRow.id], ...newRow };
+                  setWorkers(updated);
+                  return newRow;
+                }}
+              />
+            </div>
+            {/* Summary */}
+            <div className="mt-6 flex justify-between items-center text-sm">
+              <div className="text-gray-400">
+                Showing {filtered.workers ? filtered.workers.length : 0} of {workers ? workers.length : 0} workers
+              </div>
             </div>
           </div>
-          {/* Controls */}
-          <div className="flex gap-4 mb-6">
-            <button className="px-6 py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl transition-all duration-200 flex items-center gap-2 shadow-lg hover:shadow-indigo-500/25">
-              <Upload size={20} />
-              <label className="cursor-pointer">
-                <input type="file" accept=".csv,.xlsx" className="hidden" onChange={handleFile(setClients, 'clients')} />
-                Upload CSV
-              </label>
-            </button>
-          </div>
-          {/* Data Table */}
-          <div className="overflow-x-auto rounded-2xl border border-indigo-200">
-            <DataGrid
-              autoHeight
-              rows={withRowId(filtered.clients, 'clients')}
-              columns={clientsColumns}
-              pageSizeOptions={[5, 10, 20]}
-              initialState={{ pagination: { paginationModel: { pageSize: 5 } } }}
-              processRowUpdate={(newRow, _oldRow) => {
-                const updated = [...(filtered.clients || [])];
-                updated[newRow.id] = { ...updated[newRow.id], ...newRow };
-                setClients(updated);
-                return newRow;
-              }}
-            />
-          </div>
-          {/* Summary */}
-          <div className="mt-6 flex justify-between items-center text-sm">
-            <div className="text-gray-400">
-              Showing {filtered.clients ? filtered.clients.length : 0} of {clients ? clients.length : 0} clients
+          {/* Tasks Data */}
+          <div className="bg-white/10 backdrop-blur-md rounded-2xl shadow-xl p-4 border border-white/20 flex flex-col">
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-3">
+                <FaTasks className="text-cyan-400" size={24} />
+                <h3 className="text-2xl font-bold text-white">Tasks Data</h3>
+              </div>
+              <div className="text-indigo-400 text-sm">{filtered.tasks ? filtered.tasks.length : 0} records</div>
+            </div>
+            {/* Search and Modify Bars */}
+            <div className="flex flex-col gap-2 mb-6">
+              <input
+                className="w-full pl-4 pr-4 py-3 border rounded-xl text-white placeholder-gray-400 focus:ring-2 focus:ring-cyan-500 focus:border-transparent transition-all duration-200"
+                placeholder="Search tasks (natural language)"
+                value={search.tasks}
+                onChange={e => setSearch(s => ({ ...s, tasks: e.target.value }))}
+              />
+              <div className="flex gap-2">
+                <input
+                  className="w-full pl-4 pr-4 py-3 border rounded-xl text-white placeholder-gray-400 focus:ring-2 focus:ring-cyan-500 focus:border-transparent transition-all duration-200"
+                  placeholder="Modify tasks (natural language)"
+                  value={modify.tasks}
+                  onChange={e => setModify(m => ({ ...m, tasks: e.target.value }))}
+                />
+                <button className="bg-indigo-600 text-white px-4 py-2 rounded-xl" onClick={() => handleModify('tasks')}>Apply</button>
+              </div>
+            </div>
+            {/* Controls */}
+            <div className="flex gap-4 mb-6">
+              <button className="px-6 py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl transition-all duration-200 flex items-center gap-2 shadow-lg hover:shadow-indigo-500/25">
+                <Upload size={20} />
+                <label className="cursor-pointer">
+                  <input type="file" accept=".csv,.xlsx" className="hidden" onChange={handleFile(setTasks, 'tasks')} />
+                  Upload CSV
+                </label>
+              </button>
+            </div>
+            {/* Data Table (Plain MUI DataGrid) */}
+            <div className="overflow-x-auto rounded-2xl border border-indigo-200">
+              <DataGrid
+                autoHeight
+                rows={withRowId(filtered.tasks, 'tasks')}
+                columns={tasksColumns}
+                pageSizeOptions={[5, 10, 20]}
+                initialState={{ pagination: { paginationModel: { pageSize: 5 } } }}
+                processRowUpdate={(newRow) => {
+                  const updated = [...(filtered.tasks || [])];
+                  updated[newRow.id] = { ...updated[newRow.id], ...newRow };
+                  setTasks(updated);
+                  return newRow;
+                }}
+              />
+            </div>
+            {/* Summary */}
+            <div className="mt-6 flex justify-between items-center text-sm">
+              <div className="text-gray-400">
+                Showing {filtered.tasks ? filtered.tasks.length : 0} of {tasks ? tasks.length : 0} tasks
+              </div>
             </div>
           </div>
         </div>
-        {/* Workers Data */}
-        <div className="bg-white/10 backdrop-blur-md rounded-2xl shadow-xl p-4 border border-white/20 flex flex-col">
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center gap-3">
-              <FaUserTie className="text-cyan-400" size={24} />
-              <h3 className="text-2xl font-bold text-white">Workers Data</h3>
-            </div>
-            <div className="text-indigo-400 text-sm">{filtered.workers ? filtered.workers.length : 0} records</div>
-          </div>
-          {/* Search and Modify Bars */}
-          <div className="flex flex-col gap-2 mb-6">
-            <input
-              className="w-full pl-4 pr-4 py-3 border rounded-xl text-white placeholder-gray-400 focus:ring-2 focus:ring-cyan-500 focus:border-transparent transition-all duration-200"
-              placeholder="Search workers (natural language)"
-              value={search.workers}
-              onChange={e => setSearch(s => ({ ...s, workers: e.target.value }))}
-            />
-            <div className="flex gap-2">
-              <input
-                className="w-full pl-4 pr-4 py-3 border rounded-xl text-white placeholder-gray-400 focus:ring-2 focus:ring-cyan-500 focus:border-transparent transition-all duration-200"
-                placeholder="Modify workers (natural language)"
-                value={modify.workers}
-                onChange={e => setModify(m => ({ ...m, workers: e.target.value }))}
-              />
-              <button className="bg-indigo-600 text-white px-4 py-2 rounded-xl" onClick={() => handleModify('workers')}>Apply</button>
-            </div>
-          </div>
-          {/* Controls */}
-          <div className="flex gap-4 mb-6">
-            <button className="px-6 py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl transition-all duration-200 flex items-center gap-2 shadow-lg hover:shadow-indigo-500/25">
-              <Upload size={20} />
-              <label className="cursor-pointer">
-                <input type="file" accept=".csv,.xlsx" className="hidden" onChange={handleFile(setWorkers, 'workers')} />
-                Upload CSV
-              </label>
-            </button>
-          </div>
-          {/* Data Table */}
-          <div className="overflow-x-auto rounded-2xl border border-indigo-200">
-            <DataGrid
-              autoHeight
-              rows={withRowId(filtered.workers, 'workers')}
-              columns={workersColumnsEnhanced}
-              pageSizeOptions={[5, 10, 20]}
-              initialState={{ pagination: { paginationModel: { pageSize: 5 } } }}
-              processRowUpdate={(newRow, _oldRow) => {
-                const updated = [...(filtered.workers || [])];
-                updated[newRow.id] = { ...updated[newRow.id], ...newRow };
-                setWorkers(updated);
-                return newRow;
-              }}
-            />
-          </div>
-          {/* Summary */}
-          <div className="mt-6 flex justify-between items-center text-sm">
-            <div className="text-gray-400">
-              Showing {filtered.workers ? filtered.workers.length : 0} of {workers ? workers.length : 0} workers
-            </div>
-          </div>
-        </div>
-        {/* Tasks Data */}
-        <div className="bg-white/10 backdrop-blur-md rounded-2xl shadow-xl p-4 border border-white/20 flex flex-col">
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center gap-3">
-              <FaTasks className="text-cyan-400" size={24} />
-              <h3 className="text-2xl font-bold text-white">Tasks Data</h3>
-            </div>
-            <div className="text-indigo-400 text-sm">{filtered.tasks ? filtered.tasks.length : 0} records</div>
-          </div>
-          {/* Search and Modify Bars */}
-          <div className="flex flex-col gap-2 mb-6">
-            <input
-              className="w-full pl-4 pr-4 py-3 border rounded-xl text-white placeholder-gray-400 focus:ring-2 focus:ring-cyan-500 focus:border-transparent transition-all duration-200"
-              placeholder="Search tasks (natural language)"
-              value={search.tasks}
-              onChange={e => setSearch(s => ({ ...s, tasks: e.target.value }))}
-            />
-            <div className="flex gap-2">
-              <input
-                className="w-full pl-4 pr-4 py-3 border rounded-xl text-white placeholder-gray-400 focus:ring-2 focus:ring-cyan-500 focus:border-transparent transition-all duration-200"
-                placeholder="Modify tasks (natural language)"
-                value={modify.tasks}
-                onChange={e => setModify(m => ({ ...m, tasks: e.target.value }))}
-              />
-              <button className="bg-indigo-600 text-white px-4 py-2 rounded-xl" onClick={() => handleModify('tasks')}>Apply</button>
-            </div>
-          </div>
-          {/* Controls */}
-          <div className="flex gap-4 mb-6">
-            <button className="px-6 py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl transition-all duration-200 flex items-center gap-2 shadow-lg hover:shadow-indigo-500/25">
-              <Upload size={20} />
-              <label className="cursor-pointer">
-                <input type="file" accept=".csv,.xlsx" className="hidden" onChange={handleFile(setTasks, 'tasks')} />
-                Upload CSV
-              </label>
-            </button>
-          </div>
-          {/* Data Table */}
-          <div className="overflow-x-auto rounded-2xl border border-indigo-200">
-            <DataGrid
-              autoHeight
-              rows={withRowId(filtered.tasks, 'tasks')}
-              columns={tasksColumnsEnhanced}
-              pageSizeOptions={[5, 10, 20]}
-              initialState={{ pagination: { paginationModel: { pageSize: 5 } } }}
-              processRowUpdate={(newRow, _oldRow) => {
-                const updated = [...(filtered.tasks || [])];
-                updated[newRow.id] = { ...updated[newRow.id], ...newRow };
-                setTasks(updated);
-                return newRow;
-              }}
-            />
-          </div>
-          {/* Summary */}
-          <div className="mt-6 flex justify-between items-center text-sm">
-            <div className="text-gray-400">
-              Showing {filtered.tasks ? filtered.tasks.length : 0} of {tasks ? tasks.length : 0} tasks
-            </div>
-          </div>
-        </div>
+
         {/* Export Data */}
         <div className="bg-slate-800/30 backdrop-blur-md rounded-3xl p-8 border border-slate-700/50 shadow-2xl">
           <div className="flex items-center gap-3 mb-6">
@@ -688,24 +639,14 @@ export default function Home() {
             >
               <div className="flex items-center gap-4">
                 <div className="p-3 bg-orange-500/20 rounded-xl group-hover:bg-orange-500/30 transition-all duration-200">
-                  <Download className="text-orange-400 group-hover:text-orange-300" size={24} />
+                  <Settings className="text-orange-400 group-hover:text-orange-300" size={24} />
                 </div>
                 <div className="text-left">
-                  <h4 className="text-white font-semibold text-lg">Export Rules & Weights (rules.json)</h4>
-                  <p className="text-gray-400 text-sm mt-1">Download your data as CSV/JSON</p>
+                  <h4 className="text-white font-semibold text-lg">Export Rules & Weights</h4>
+                  <p className="text-gray-400 text-sm mt-1">Download your configuration as JSON</p>
                 </div>
               </div>
             </button>
-          </div>
-
-          <div className="mt-8 p-6 bg-gradient-to-r from-purple-500/10 to-blue-500/10 rounded-2xl border border-purple-500/20">
-            <h4 className="text-white font-semibold text-lg mb-3">📋 Export Instructions</h4>
-            <ul className="text-gray-300 space-y-2 text-sm">
-              <li>• <strong>CSV files</strong> can be opened in Excel or Google Sheets</li>
-              <li>• <strong>JSON files</strong> contain your rules and configuration settings</li>
-              <li>• All exports include timestamp and version information</li>
-              <li>• Data is formatted for easy integration with other systems</li>
-            </ul>
           </div>
         </div>
       </section>

@@ -7,10 +7,15 @@ export type ValidationError = {
   message: string;
 };
 
+// Type for data rows
+interface DataRow {
+  [key: string]: string | number | boolean | object;
+}
+
 export function validateData(
-  clients: any[] | null,
-  workers: any[] | null,
-  tasks: any[] | null
+  clients: DataRow[] | null,
+  workers: DataRow[] | null,
+  tasks: DataRow[] | null
 ): ValidationError[] {
   const errors: ValidationError[] = [];
 
@@ -40,7 +45,7 @@ export function validateData(
     // 5. Broken JSON in AttributesJSON
     clients.forEach((row, i) => {
       try {
-        JSON.parse(row.AttributesJSON);
+        JSON.parse(row.AttributesJSON as string);
       } catch {
         errors.push({ entity: 'clients', rowIndex: i, column: 'AttributesJSON', message: 'Malformed JSON in AttributesJSON' });
       }
@@ -49,7 +54,7 @@ export function validateData(
     if (tasks && tasks.length > 0) {
       const taskIDs = new Set(tasks.map((t) => t.TaskID));
       clients.forEach((row, i) => {
-        const ids = (row.RequestedTaskIDs || '').split(',').map((id: string) => id.trim());
+        const ids = (row.RequestedTaskIDs as string || '').split(',').map((id: string) => id.trim());
         ids.forEach((id: string) => {
           if (id && !taskIDs.has(id)) {
             errors.push({ entity: 'clients', rowIndex: i, column: 'RequestedTaskIDs', message: `Unknown TaskID referenced: ${id}` });
@@ -77,8 +82,8 @@ export function validateData(
     // 3. Malformed lists (e.g., non-numeric in AvailableSlots)
     workers.forEach((row, i) => {
       try {
-        const slots = JSON.parse(row.AvailableSlots);
-        if (!Array.isArray(slots) || slots.some((s: any) => typeof s !== 'number')) {
+        const slots = JSON.parse(row.AvailableSlots as string);
+        if (!Array.isArray(slots) || slots.some((s: unknown) => typeof s !== 'number')) {
           errors.push({ entity: 'workers', rowIndex: i, column: 'AvailableSlots', message: 'AvailableSlots must be an array of numbers' });
         }
       } catch {
@@ -88,7 +93,7 @@ export function validateData(
     // 8. Overloaded workers (AvailableSlots.length < MaxLoadPerPhase)
     workers.forEach((row, i) => {
       try {
-        const slots = JSON.parse(row.AvailableSlots);
+        const slots = JSON.parse(row.AvailableSlots as string);
         if (Array.isArray(slots) && Number(row.MaxLoadPerPhase) > slots.length) {
           errors.push({ entity: 'workers', rowIndex: i, column: 'MaxLoadPerPhase', message: 'MaxLoadPerPhase exceeds available slots' });
         }
@@ -121,10 +126,10 @@ export function validateData(
     // 9. Skill-coverage matrix: every RequiredSkill maps to ≥1 worker
     if (workers && workers.length > 0) {
       const allSkills = new Set(
-        workers.flatMap((w) => (w.Skills || '').split(',').map((s: string) => s.trim()))
+        workers.flatMap((w) => (w.Skills as string || '').split(',').map((s: string) => s.trim()))
       );
       tasks.forEach((row, i) => {
-        (row.RequiredSkills || '').split(',').map((s: string) => s.trim()).forEach((skill: string) => {
+        (row.RequiredSkills as string || '').split(',').map((s: string) => s.trim()).forEach((skill: string) => {
           if (skill && !allSkills.has(skill)) {
             errors.push({ entity: 'tasks', rowIndex: i, column: 'RequiredSkills', message: `No worker covers required skill: ${skill}` });
           }
@@ -134,9 +139,9 @@ export function validateData(
     // 10. Max-concurrency feasibility: MaxConcurrent ≤ count of qualified, available workers
     if (workers && workers.length > 0) {
       tasks.forEach((row, i) => {
-        const requiredSkills = (row.RequiredSkills || '').split(',').map((s: string) => s.trim());
+        const requiredSkills = (row.RequiredSkills as string || '').split(',').map((s: string) => s.trim());
         const qualifiedWorkers = workers.filter((w) =>
-          requiredSkills.every((skill: string) => (w.Skills || '').split(',').map((s: string) => s.trim()).includes(skill))
+          requiredSkills.every((skill: string) => (w.Skills as string || '').split(',').map((s: string) => s.trim()).includes(skill))
         );
         if (Number(row.MaxConcurrent) > qualifiedWorkers.length) {
           errors.push({ entity: 'tasks', rowIndex: i, column: 'MaxConcurrent', message: 'MaxConcurrent exceeds qualified workers' });
