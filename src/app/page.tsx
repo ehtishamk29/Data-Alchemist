@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import { useState, useMemo, useEffect } from "react";
 import * as XLSX from "xlsx";
 import Papa from "papaparse";
@@ -9,7 +8,7 @@ import { validateData, ValidationError } from "./validation";
 import Slider from '@mui/material/Slider';
 import FileSaver from 'file-saver';
 import * as aiService from './aiService';
-import { FaMagic, FaSlidersH, FaUsers, FaUserTie, FaTasks, FaExclamationTriangle, FaFileExport } from 'react-icons/fa';
+import { FaUsers, FaUserTie, FaTasks, FaExclamationTriangle, FaFileExport } from 'react-icons/fa';
 import { HiOutlineUpload } from 'react-icons/hi';
 import { Plus, Trash2, Settings, BarChart3, Users, Search, Upload, Download, FileText, Database, Table } from 'lucide-react';
 import { AlertTriangle, CheckCircle, XCircle } from 'lucide-react';
