@@ -279,6 +279,96 @@ export default function Home() {
 
   const allocationPreview = generateAllocationPreview();
 
+  // Function to get validation errors for a specific cell
+  const getCellValidationErrors = (entity: 'clients' | 'workers' | 'tasks', rowId: string | number, column: string) => {
+    return validationErrors.filter(error => {
+      if (error.entity !== entity || error.column !== column) return false;
+      
+      // Handle global errors (rowIndex is null)
+      if (error.rowIndex === null) return true;
+      
+      // For row-specific errors, we need to find the actual row by ID
+      const data = entity === 'clients' ? clients : entity === 'workers' ? workers : tasks;
+      if (!data) return false;
+      
+      // Find the row by its ID field
+      const idField = entity === 'clients' ? 'ClientID' : entity === 'workers' ? 'WorkerID' : 'TaskID';
+      const actualRow = data.find(row => row[idField] === rowId);
+      
+      // If we found the row, check if the error rowIndex matches
+      if (actualRow) {
+        const rowIndex = data.indexOf(actualRow);
+        return rowIndex === error.rowIndex;
+      }
+      
+      return false;
+    });
+  };
+
+  // Function to get cell styling based on validation errors
+  const getCellStyle = (entity: 'clients' | 'workers' | 'tasks', rowId: string | number, column: string) => {
+    const errors = getCellValidationErrors(entity, rowId, column);
+    if (errors.length === 0) return {};
+    
+    const hasError = errors.some(e => e.severity === 'error');
+    const hasWarning = errors.some(e => e.severity === 'warning');
+    
+    if (hasError) {
+      return {
+        backgroundColor: 'rgba(239, 68, 68, 0.2)', // red background
+        border: '2px solid rgba(239, 68, 68, 0.6)',
+        borderRadius: '4px'
+      };
+    } else if (hasWarning) {
+      return {
+        backgroundColor: 'rgba(245, 158, 11, 0.2)', // yellow background
+        border: '2px solid rgba(245, 158, 11, 0.6)',
+        borderRadius: '4px'
+      };
+    }
+    return {};
+  };
+
+  // Enhanced column definitions with cell highlighting
+  const getEnhancedColumns = (data: DataRow[], entity: 'clients' | 'workers' | 'tasks'): GridColDef[] => {
+    if (!data || data.length === 0) return [];
+    return Object.keys(data[0]).map((key) => ({
+      field: key,
+      headerName: key,
+      width: 180,
+      editable: true,
+      flex: 1,
+      renderCell: (params) => {
+        const cellErrors = getCellValidationErrors(entity, params.row.id, key);
+        const cellStyle = getCellStyle(entity, params.row.id, key);
+        
+        // Debug logging
+        if (cellErrors.length > 0) {
+          console.log(`Cell ${entity} ${params.row.id} ${key} has ${cellErrors.length} errors:`, cellErrors);
+        }
+        
+        return (
+          <div 
+            style={cellStyle}
+            className="w-full h-full flex items-center px-2"
+            title={cellErrors.length > 0 ? cellErrors.map(e => e.message).join('\n') : ''}
+          >
+            <span className="truncate">{String(params.value || '')}</span>
+            {cellErrors.length > 0 && (
+              <div className="ml-1">
+                {cellErrors.some(e => e.severity === 'error') ? (
+                  <div className="w-2 h-2 bg-red-500 rounded-full" title="Error" />
+                ) : (
+                  <div className="w-2 h-2 bg-yellow-500 rounded-full" title="Warning" />
+                )}
+              </div>
+            )}
+          </div>
+        );
+      }
+    }));
+  };
+
   const weightItems = [
     { key: 'priorityLevel', label: 'Priority Level Weight', color: 'purple' },
     { key: 'requestedTaskFulfillment', label: 'Requirement Task Fulfillment Weight', color: 'blue' },
@@ -601,11 +691,33 @@ export default function Home() {
             <div className="mb-2 text-sm text-blue-300">
               💡 Click on any cell to edit. Changes are automatically saved.
             </div>
+            {/* Validation Legend */}
+            {validationErrors.length > 0 && (
+              <div className="mb-3 flex items-center gap-4 text-xs">
+                <span className="text-gray-400">Validation: {validationErrors.length} issues found</span>
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 bg-red-500/20 border border-red-500/60 rounded"></div>
+                  <span className="text-red-400">Error</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 bg-yellow-500/20 border border-yellow-500/60 rounded"></div>
+                  <span className="text-yellow-400">Warning</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 bg-red-500 rounded-full"></div>
+                  <span className="text-gray-400">Error indicator</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 bg-yellow-500 rounded-full"></div>
+                  <span className="text-gray-400">Warning indicator</span>
+                </div>
+              </div>
+            )}
             <div className="overflow-x-auto rounded-2xl border border-indigo-200">
               <DataGrid
                 autoHeight
                 rows={withRowId(filtered.clients, 'clients')}
-                columns={clientsColumns}
+                columns={getEnhancedColumns(filtered.clients || [], 'clients')}
                 pageSizeOptions={[5, 10, 20]}
                 initialState={{ pagination: { paginationModel: { pageSize: 5 } } }}
                 processRowUpdate={(newRow) => {
@@ -675,11 +787,33 @@ export default function Home() {
             <div className="mb-2 text-sm text-blue-300">
               💡 Click on any cell to edit. Changes are automatically saved.
             </div>
+            {/* Validation Legend */}
+            {validationErrors.length > 0 && (
+              <div className="mb-3 flex items-center gap-4 text-xs">
+                <span className="text-gray-400">Validation: {validationErrors.length} issues found</span>
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 bg-red-500/20 border border-red-500/60 rounded"></div>
+                  <span className="text-red-400">Error</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 bg-yellow-500/20 border border-yellow-500/60 rounded"></div>
+                  <span className="text-yellow-400">Warning</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 bg-red-500 rounded-full"></div>
+                  <span className="text-gray-400">Error indicator</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 bg-yellow-500 rounded-full"></div>
+                  <span className="text-gray-400">Warning indicator</span>
+                </div>
+              </div>
+            )}
             <div className="overflow-x-auto rounded-2xl border border-indigo-200">
               <DataGrid
                 autoHeight
                 rows={withRowId(filtered.workers, 'workers')}
-                columns={workersColumns}
+                columns={getEnhancedColumns(filtered.workers || [], 'workers')}
                 pageSizeOptions={[5, 10, 20]}
                 initialState={{ pagination: { paginationModel: { pageSize: 5 } } }}
                 processRowUpdate={(newRow) => {
@@ -749,11 +883,33 @@ export default function Home() {
             <div className="mb-2 text-sm text-blue-300">
               💡 Click on any cell to edit. Changes are automatically saved.
             </div>
+            {/* Validation Legend */}
+            {validationErrors.length > 0 && (
+              <div className="mb-3 flex items-center gap-4 text-xs">
+                <span className="text-gray-400">Validation: {validationErrors.length} issues found</span>
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 bg-red-500/20 border border-red-500/60 rounded"></div>
+                  <span className="text-red-400">Error</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 bg-yellow-500/20 border border-yellow-500/60 rounded"></div>
+                  <span className="text-yellow-400">Warning</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 bg-red-500 rounded-full"></div>
+                  <span className="text-gray-400">Error indicator</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 bg-yellow-500 rounded-full"></div>
+                  <span className="text-gray-400">Warning indicator</span>
+                </div>
+              </div>
+            )}
             <div className="overflow-x-auto rounded-2xl border border-indigo-200">
               <DataGrid
                 autoHeight
                 rows={withRowId(filtered.tasks, 'tasks')}
-                columns={tasksColumns}
+                columns={getEnhancedColumns(filtered.tasks || [], 'tasks')}
                 pageSizeOptions={[5, 10, 20]}
                 initialState={{ pagination: { paginationModel: { pageSize: 5 } } }}
                 processRowUpdate={(newRow) => {
