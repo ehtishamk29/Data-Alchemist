@@ -121,15 +121,79 @@ export default function Home() {
         workers: workers,
         tasks: tasks,
       };
-      if (clients && search.clients) {
-        newFiltered.clients = await aiService.queryData(search.clients, clients, apiKey);
+      
+      // Only use AI search if API key is provided
+      if (apiKey) {
+        if (clients && search.clients) {
+          try {
+            newFiltered.clients = await aiService.queryData(search.clients, clients, apiKey);
+          } catch (error) {
+            console.error('Search failed:', error);
+            // Fallback to basic search if AI fails
+            const query = search.clients.toLowerCase();
+            newFiltered.clients = clients.filter(client =>
+              Object.values(client).some(value => 
+                String(value).toLowerCase().includes(query)
+              )
+            );
+          }
+        }
+        if (workers && search.workers) {
+          try {
+            newFiltered.workers = await aiService.queryData(search.workers, workers, apiKey);
+          } catch (error) {
+            console.error('Search failed:', error);
+            // Fallback to basic search if AI fails
+            const query = search.workers.toLowerCase();
+            newFiltered.workers = workers.filter(worker =>
+              Object.values(worker).some(value => 
+                String(value).toLowerCase().includes(query)
+              )
+            );
+          }
+        }
+        if (tasks && search.tasks) {
+          try {
+            newFiltered.tasks = await aiService.queryData(search.tasks, tasks, apiKey);
+          } catch (error) {
+            console.error('Search failed:', error);
+            // Fallback to basic search if AI fails
+            const query = search.tasks.toLowerCase();
+            newFiltered.tasks = tasks.filter(task =>
+              Object.values(task).some(value => 
+                String(value).toLowerCase().includes(query)
+              )
+            );
+          }
+        }
+      } else {
+        // Basic search without AI
+        if (clients && search.clients) {
+          const query = search.clients.toLowerCase();
+          newFiltered.clients = clients.filter(client =>
+            Object.values(client).some(value => 
+              String(value).toLowerCase().includes(query)
+            )
+          );
+        }
+        if (workers && search.workers) {
+          const query = search.workers.toLowerCase();
+          newFiltered.workers = workers.filter(worker =>
+            Object.values(worker).some(value => 
+              String(value).toLowerCase().includes(query)
+            )
+          );
+        }
+        if (tasks && search.tasks) {
+          const query = search.tasks.toLowerCase();
+          newFiltered.tasks = tasks.filter(task =>
+            Object.values(task).some(value => 
+              String(value).toLowerCase().includes(query)
+            )
+          );
+        }
       }
-      if (workers && search.workers) {
-        newFiltered.workers = await aiService.queryData(search.workers, workers, apiKey);
-      }
-      if (tasks && search.tasks) {
-        newFiltered.tasks = await aiService.queryData(search.tasks, tasks, apiKey);
-      }
+      
       setFiltered(newFiltered);
     }
     doFilter();
@@ -137,12 +201,41 @@ export default function Home() {
 
   const handleModify = async (entity: 'clients' | 'workers' | 'tasks') => {
     if (!modify[entity]) return;
-    const newData = await aiService.modifyData(modify[entity], (entity === 'clients' ? clients : entity === 'workers' ? workers : tasks) || [], apiKey);
-    if (entity === 'clients') setClients(newData);
-    if (entity === 'workers') setWorkers(newData);
-    if (entity === 'tasks') setTasks(newData);
-    setModify(m => ({ ...m, [entity]: '' }));
-    setLastModified({ [entity]: new Date() });
+    
+    if (!apiKey) {
+      setAiError('Please enter your OpenAI API key to use AI modification features');
+      return;
+    }
+    
+    setIsLoadingAI(true);
+    setAiError(null);
+    
+    try {
+      const data = entity === 'clients' ? clients : entity === 'workers' ? workers : tasks;
+      if (!data) {
+        setAiError(`No ${entity} data available to modify`);
+        return;
+      }
+      
+      const newData = await aiService.modifyData(modify[entity], data, apiKey);
+      
+      if (entity === 'clients') setClients(newData);
+      if (entity === 'workers') setWorkers(newData);
+      if (entity === 'tasks') setTasks(newData);
+      
+      setModify(m => ({ ...m, [entity]: '' }));
+      setLastModified({ [entity]: new Date() });
+      
+      // Show success message
+      setAiError(`✅ Successfully modified ${entity} data`);
+      setTimeout(() => setAiError(null), 3000);
+    } catch (error) {
+      console.error('Modification failed:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to modify data';
+      setAiError(errorMessage);
+    } finally {
+      setIsLoadingAI(false);
+    }
   };
 
   function handleAddRule(e: React.FormEvent) {

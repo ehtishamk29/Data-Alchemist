@@ -136,7 +136,50 @@ Map these headers to the expected schema. Return only a JSON array like: ["Clien
 }
 
 export async function queryData(query: string, data: DataRow[], apiKey?: string): Promise<DataRow[]> {
-  if (!apiKey || !query.trim()) {
+  if (!query.trim()) {
+    return data;
+  }
+
+  if (!apiKey) {
+    // Fallback: simple keyword/regex filter
+    try {
+      const q = query.trim().toLowerCase();
+      
+      // Handle some common natural language patterns
+      if (/priority.*high/i.test(query)) {
+        return data.filter(row => Number(row.PriorityLevel) >= 4);
+      }
+      if (/priority.*low/i.test(query)) {
+        return data.filter(row => Number(row.PriorityLevel) <= 2);
+      }
+      if (/duration.*>\s*1/i.test(query)) {
+        return data.filter(row => Number(row.Duration) > 1);
+      }
+      if (/duration.*<\s*3/i.test(query)) {
+        return data.filter(row => Number(row.Duration) < 3);
+      }
+      if (/skills.*python/i.test(query)) {
+        return data.filter(row => 
+          String(row.Skills || '').toLowerCase().includes('python')
+        );
+      }
+      if (/skills.*javascript/i.test(query)) {
+        return data.filter(row => 
+          String(row.Skills || '').toLowerCase().includes('javascript')
+        );
+      }
+      
+      // Generic substring search across all fields
+      if (q) {
+        return data.filter(row =>
+          Object.values(row).some(
+            v => typeof v === 'string' && v.toLowerCase().includes(q)
+          )
+        );
+      }
+    } catch (error) {
+      console.error('Fallback search failed:', error);
+    }
     return data;
   }
 
@@ -158,6 +201,13 @@ Return only a JSON array of row indices (0-based) that match the query. For exam
     }
   } catch (error) {
     console.error('Data query failed:', error);
+    // Fallback to basic search on error
+    const q = query.trim().toLowerCase();
+    return data.filter(row =>
+      Object.values(row).some(
+        v => typeof v === 'string' && v.toLowerCase().includes(q)
+      )
+    );
   }
   
   return data;
@@ -201,15 +251,57 @@ Return only a JSON object like:
 }
 
 export async function modifyData(nlCommand: string, data: DataRow[], apiKey?: string): Promise<DataRow[]> {
+  if (!nlCommand.trim()) {
+    return data;
+  }
+
   if (!apiKey) {
     // Fallback: simple command parser
-    if (/set all prioritylevel to (\d+)/i.test(nlCommand)) {
-      const val = nlCommand.match(/set all prioritylevel to (\d+)/i)?.[1];
-      if (val) {
-        return data.map(row => ({ ...row, PriorityLevel: val }));
+    try {
+      const command = nlCommand.toLowerCase();
+      
+      // Handle common modification patterns
+      if (/set all prioritylevel to (\d+)/i.test(nlCommand)) {
+        const val = nlCommand.match(/set all prioritylevel to (\d+)/i)?.[1];
+        if (val) {
+          return data.map(row => ({ ...row, PriorityLevel: Number(val) }));
+        }
       }
+      
+      if (/set all.*priority.*to (\d+)/i.test(nlCommand)) {
+        const val = nlCommand.match(/set all.*priority.*to (\d+)/i)?.[1];
+        if (val) {
+          return data.map(row => ({ ...row, PriorityLevel: Number(val) }));
+        }
+      }
+      
+      if (/increase.*priority/i.test(nlCommand)) {
+        return data.map(row => ({ 
+          ...row, 
+          PriorityLevel: Math.min(5, Number(row.PriorityLevel || 1) + 1) 
+        }));
+      }
+      
+      if (/decrease.*priority/i.test(nlCommand)) {
+        return data.map(row => ({ 
+          ...row, 
+          PriorityLevel: Math.max(1, Number(row.PriorityLevel || 1) - 1) 
+        }));
+      }
+      
+      if (/set.*group.*to (.+)/i.test(nlCommand)) {
+        const group = nlCommand.match(/set.*group.*to (.+)/i)?.[1];
+        if (group) {
+          return data.map(row => ({ ...row, GroupTag: group.trim() }));
+        }
+      }
+      
+      console.warn('No matching modification pattern found for:', nlCommand);
+      return data;
+    } catch (error) {
+      console.error('Fallback modification failed:', error);
+      return data;
     }
-    return data;
   }
 
   try {
@@ -230,6 +322,8 @@ Apply the command to all data and return the complete modified dataset as a JSON
     }
   } catch (error) {
     console.error('Data modification failed:', error);
+    // Fallback to basic modification on error
+    return data;
   }
   
   return data;
