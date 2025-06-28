@@ -8,9 +8,8 @@ import { validateData, ValidationError } from "./validation";
 import Slider from '@mui/material/Slider';
 import FileSaver from 'file-saver';
 import * as aiService from './aiService';
-import { FaUsers, FaUserTie, FaTasks, FaExclamationTriangle, FaFileExport } from 'react-icons/fa';
-import { HiOutlineUpload } from 'react-icons/hi';
-import { Plus, Trash2, Settings, BarChart3, Users, Search, Upload, Download, FileText, Database, Table } from 'lucide-react';
+import { FaUserTie, FaTasks } from 'react-icons/fa';
+import { Plus, Trash2, Settings, BarChart3, Users, Upload, Download, FileText, Database, Table } from 'lucide-react';
 import { AlertTriangle, CheckCircle, XCircle } from 'lucide-react';
 
 // Type for data rows
@@ -93,12 +92,6 @@ export default function Home() {
   useEffect(() => {
     setValidationErrors(validateData(clients, workers, tasks));
   }, [clients, workers, tasks]);
-
-  useEffect(() => {
-    // Debug: Log clients and validation errors to the console
-    // console.log('Clients:', clients);
-    // console.log('Validation Errors:', validationErrors);
-  }, [clients, validationErrors]);
 
   const handleFile = (entitySetter: (data: DataRow[]) => void, entity: 'clients' | 'workers' | 'tasks') => async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -452,7 +445,7 @@ export default function Home() {
             </div>
           </div>
         )}
-        {/* Clients Data Section (Plain MUI DataGrid) */}
+        {/* Clients Data Section */}
         <div className="bg-white/10 backdrop-blur-md rounded-2xl shadow-xl p-4 border border-white/20 flex flex-col mt-8">
           <div className="flex items-center justify-between mb-6">
             <div className="flex items-center gap-3">
@@ -489,7 +482,7 @@ export default function Home() {
               </label>
             </button>
           </div>
-          {/* Data Table (Plain MUI DataGrid) */}
+          {/* Data Table */}
           <div className="overflow-x-auto rounded-2xl border border-indigo-200">
             <DataGrid
               autoHeight
@@ -497,7 +490,7 @@ export default function Home() {
               columns={clientsColumns}
               pageSizeOptions={[5, 10, 20]}
               initialState={{ pagination: { paginationModel: { pageSize: 5 } } }}
-              processRowUpdate={(newRow, oldRow) => {
+              processRowUpdate={(newRow, _oldRow) => {
                 const updated = [...(filtered.clients || [])];
                 updated[newRow.id] = { ...updated[newRow.id], ...newRow };
                 setClients(updated);
@@ -549,7 +542,7 @@ export default function Home() {
               </label>
             </button>
           </div>
-          {/* Data Table (Plain MUI DataGrid) */}
+          {/* Data Table */}
           <div className="overflow-x-auto rounded-2xl border border-indigo-200">
             <DataGrid
               autoHeight
@@ -557,7 +550,7 @@ export default function Home() {
               columns={workersColumnsEnhanced}
               pageSizeOptions={[5, 10, 20]}
               initialState={{ pagination: { paginationModel: { pageSize: 5 } } }}
-              processRowUpdate={(newRow, oldRow) => {
+              processRowUpdate={(newRow, _oldRow) => {
                 const updated = [...(filtered.workers || [])];
                 updated[newRow.id] = { ...updated[newRow.id], ...newRow };
                 setWorkers(updated);
@@ -609,7 +602,7 @@ export default function Home() {
               </label>
             </button>
           </div>
-          {/* Data Table (Plain MUI DataGrid) */}
+          {/* Data Table */}
           <div className="overflow-x-auto rounded-2xl border border-indigo-200">
             <DataGrid
               autoHeight
@@ -617,7 +610,7 @@ export default function Home() {
               columns={tasksColumnsEnhanced}
               pageSizeOptions={[5, 10, 20]}
               initialState={{ pagination: { paginationModel: { pageSize: 5 } } }}
-              processRowUpdate={(newRow, oldRow) => {
+              processRowUpdate={(newRow, _oldRow) => {
                 const updated = [...(filtered.tasks || [])];
                 updated[newRow.id] = { ...updated[newRow.id], ...newRow };
                 setTasks(updated);
@@ -659,4 +652,64 @@ export default function Home() {
             <button
               onClick={() => exportCSV(workers || [], 'workers.csv')}
               disabled={!workers}
-              className={`
+              className={`group p-6 bg-slate-700/30 hover:bg-slate-700/50 border border-slate-600/30 hover:border-green-500/50 rounded-2xl transition-all duration-300 hover:scale-105 hover:shadow-lg hover:shadow-green-500/10 ${!workers ? 'opacity-50 cursor-not-allowed' : ''}`}
+            >
+              <div className="flex items-center gap-4">
+                <div className="p-3 bg-green-500/20 rounded-xl group-hover:bg-green-500/30 transition-all duration-200">
+                  <Database className="text-green-400 group-hover:text-green-300" size={24} />
+                </div>
+                <div className="text-left">
+                  <h4 className="text-white font-semibold text-lg">Export Workers CSV</h4>
+                  <p className="text-gray-400 text-sm mt-1">Download your data as CSV/JSON</p>
+                </div>
+              </div>
+            </button>
+
+            <button
+              onClick={() => exportCSV(tasks || [], 'tasks.csv')}
+              disabled={!tasks}
+              className={`group p-6 bg-slate-700/30 hover:bg-slate-700/50 border border-slate-600/30 hover:border-purple-500/50 rounded-2xl transition-all duration-300 hover:scale-105 hover:shadow-lg hover:shadow-purple-500/10 ${!tasks ? 'opacity-50 cursor-not-allowed' : ''}`}
+            >
+              <div className="flex items-center gap-4">
+                <div className="p-3 bg-purple-500/20 rounded-xl group-hover:bg-purple-500/30 transition-all duration-200">
+                  <Table className="text-purple-400 group-hover:text-purple-300" size={24} />
+                </div>
+                <div className="text-left">
+                  <h4 className="text-white font-semibold text-lg">Export Tasks CSV</h4>
+                  <p className="text-gray-400 text-sm mt-1">Download your data as CSV/JSON</p>
+                </div>
+              </div>
+            </button>
+
+            <button
+              onClick={exportRulesAndWeights}
+              disabled={rules.length === 0}
+              className={`group p-6 bg-slate-700/30 hover:bg-slate-700/50 border border-slate-600/30 hover:border-orange-500/50 rounded-2xl transition-all duration-300 hover:scale-105 hover:shadow-lg hover:shadow-orange-500/10 ${rules.length === 0 ? 'opacity-50 cursor-not-allowed' : ''}`}
+            >
+              <div className="flex items-center gap-4">
+                <div className="p-3 bg-orange-500/20 rounded-xl group-hover:bg-orange-500/30 transition-all duration-200">
+                  <Download className="text-orange-400 group-hover:text-orange-300" size={24} />
+                </div>
+                <div className="text-left">
+                  <h4 className="text-white font-semibold text-lg">Export Rules & Weights (rules.json)</h4>
+                  <p className="text-gray-400 text-sm mt-1">Download your data as CSV/JSON</p>
+                </div>
+              </div>
+            </button>
+          </div>
+
+          <div className="mt-8 p-6 bg-gradient-to-r from-purple-500/10 to-blue-500/10 rounded-2xl border border-purple-500/20">
+            <h4 className="text-white font-semibold text-lg mb-3">📋 Export Instructions</h4>
+            <ul className="text-gray-300 space-y-2 text-sm">
+              <li>• <strong>CSV files</strong> can be opened in Excel or Google Sheets</li>
+              <li>• <strong>JSON files</strong> contain your rules and configuration settings</li>
+              <li>• All exports include timestamp and version information</li>
+              <li>• Data is formatted for easy integration with other systems</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+      <footer className="mt-10 text-sm text-blue-400">&copy; {new Date().getFullYear()} Data Alchemist</footer>
+    </div>
+  );
+}
