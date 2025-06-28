@@ -258,8 +258,6 @@ export async function modifyData(nlCommand: string, data: DataRow[], apiKey?: st
   if (!apiKey) {
     // Fallback: simple command parser
     try {
-      const command = nlCommand.toLowerCase();
-      
       // Handle common modification patterns
       if (/set all prioritylevel to (\d+)/i.test(nlCommand)) {
         const val = nlCommand.match(/set all prioritylevel to (\d+)/i)?.[1];
@@ -482,4 +480,4 @@ Return only a JSON array like:
     console.error('AI validation failed:', error);
     return [];
   }
-} 
+}
