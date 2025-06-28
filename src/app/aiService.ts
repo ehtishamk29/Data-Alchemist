@@ -37,8 +37,18 @@ interface DataCorrection {
 // OpenAI API configuration
 const OPENAI_API_URL = 'https://api.openai.com/v1/chat/completions';
 
+// Validate OpenAI API key format
+function validateApiKey(apiKey: string): boolean {
+  return apiKey.startsWith('sk-') && apiKey.length > 20;
+}
+
 async function callOpenAI(prompt: string, apiKey: string, systemPrompt?: string): Promise<string> {
   try {
+    // Validate API key format first
+    if (!validateApiKey(apiKey)) {
+      throw new Error('Invalid API key format. Please check your OpenAI API key.');
+    }
+
     const response = await fetch(OPENAI_API_URL, {
       method: 'POST',
       headers: {
@@ -57,14 +67,35 @@ async function callOpenAI(prompt: string, apiKey: string, systemPrompt?: string)
     });
 
     if (!response.ok) {
-      throw new Error(`OpenAI API error: ${response.status}`);
+      const errorData = await response.json().catch(() => ({}));
+      
+      // Handle specific OpenAI API errors
+      if (response.status === 401) {
+        throw new Error('Invalid API key. Please check your OpenAI API key and try again.');
+      } else if (response.status === 429) {
+        throw new Error('Rate limit exceeded. Please wait a moment and try again.');
+      } else if (response.status === 400) {
+        throw new Error('Invalid request. Please check your input and try again.');
+      } else if (response.status === 403) {
+        throw new Error('Access denied. Please check your OpenAI account status and billing.');
+      } else if (response.status >= 500) {
+        throw new Error('OpenAI service is temporarily unavailable. Please try again later.');
+      } else {
+        throw new Error(`OpenAI API error: ${response.status} - ${errorData.error?.message || 'Unknown error'}`);
+      }
     }
 
     const data = await response.json();
     return data.choices[0]?.message?.content || '';
   } catch (error) {
     console.error('OpenAI API call failed:', error);
-    throw error;
+    
+    // Re-throw with user-friendly messages
+    if (error instanceof Error) {
+      throw error;
+    } else {
+      throw new Error('Failed to connect to OpenAI. Please check your internet connection and try again.');
+    }
   }
 }
 

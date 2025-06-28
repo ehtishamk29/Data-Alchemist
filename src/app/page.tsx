@@ -87,10 +87,16 @@ export default function Home() {
   const [dataCorrections, setDataCorrections] = useState<{ [key: string]: any[] }>({});
   const [aiValidationErrors, setAiValidationErrors] = useState<{ [key: string]: any[] }>({});
   const [isLoadingAI, setIsLoadingAI] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
 
   useEffect(() => {
     setValidationErrors(validateData(clients, workers, tasks));
   }, [clients, workers, tasks]);
+
+  // Clear AI errors when API key changes
+  useEffect(() => {
+    setAiError(null);
+  }, [apiKey]);
 
   const handleFile = (entitySetter: (data: DataRow[]) => void, entity: 'clients' | 'workers' | 'tasks') => async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -183,16 +189,31 @@ export default function Home() {
   }
 
   const handleGetRuleSuggestions = async () => {
-    const suggestions = await aiService.aiRuleRecommendations(clients, workers, tasks, apiKey);
-    // Convert RuleSuggestion to DataRow for compatibility
-    const dataRowSuggestions: DataRow[] = suggestions.map(s => ({
-      type: s.type,
-      description: s.reason,
-      tasks: s.tasks || [],
-      worker: s.worker || ''
-    }));
-    setRuleSuggestions(dataRowSuggestions);
-    setLastModified({ ruleSuggestions: new Date() });
+    if (!apiKey) {
+      setAiError('Please enter your OpenAI API key to use AI features');
+      return;
+    }
+    
+    setIsLoadingAI(true);
+    setAiError(null);
+    try {
+      const suggestions = await aiService.aiRuleRecommendations(clients, workers, tasks, apiKey);
+      // Convert RuleSuggestion to DataRow for compatibility
+      const dataRowSuggestions: DataRow[] = suggestions.map(s => ({
+        type: s.type,
+        description: s.reason,
+        tasks: s.tasks || [],
+        worker: s.worker || ''
+      }));
+      setRuleSuggestions(dataRowSuggestions);
+      setLastModified({ ruleSuggestions: new Date() });
+    } catch (error) {
+      console.error('Failed to get rule suggestions:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to get AI rule suggestions';
+      setAiError(errorMessage);
+    } finally {
+      setIsLoadingAI(false);
+    }
   };
 
   const handleAddSuggestedRule = (suggestion: DataRow) => {
@@ -204,11 +225,12 @@ export default function Home() {
   // AI Data Correction Functions
   const handleGetDataCorrections = async (entity: 'clients' | 'workers' | 'tasks') => {
     if (!apiKey) {
-      alert('Please enter your OpenAI API key to use AI features');
+      setAiError('Please enter your OpenAI API key to use AI features');
       return;
     }
     
     setIsLoadingAI(true);
+    setAiError(null);
     try {
       const data = entity === 'clients' ? clients : entity === 'workers' ? workers : tasks;
       if (!data) return;
@@ -218,7 +240,8 @@ export default function Home() {
       setLastModified({ [`corrections_${entity}`]: new Date() });
     } catch (error) {
       console.error('Failed to get data corrections:', error);
-      alert('Failed to get AI data corrections. Please check your API key and try again.');
+      const errorMessage = error instanceof Error ? error.message : 'Failed to get AI data corrections';
+      setAiError(errorMessage);
     } finally {
       setIsLoadingAI(false);
     }
@@ -249,11 +272,12 @@ export default function Home() {
   // AI Validation Functions
   const handleRunAIValidation = async (entity: 'clients' | 'workers' | 'tasks') => {
     if (!apiKey) {
-      alert('Please enter your OpenAI API key to use AI features');
+      setAiError('Please enter your OpenAI API key to use AI features');
       return;
     }
     
     setIsLoadingAI(true);
+    setAiError(null);
     try {
       const data = entity === 'clients' ? clients : entity === 'workers' ? workers : tasks;
       if (!data) return;
@@ -263,7 +287,8 @@ export default function Home() {
       setLastModified({ [`aiValidation_${entity}`]: new Date() });
     } catch (error) {
       console.error('Failed to run AI validation:', error);
-      alert('Failed to run AI validation. Please check your API key and try again.');
+      const errorMessage = error instanceof Error ? error.message : 'Failed to run AI validation';
+      setAiError(errorMessage);
     } finally {
       setIsLoadingAI(false);
     }
@@ -272,16 +297,17 @@ export default function Home() {
   // Natural Language Rule Parsing
   const handleParseNaturalLanguageRule = async () => {
     if (!apiKey) {
-      alert('Please enter your OpenAI API key to use AI features');
+      setAiError('Please enter your OpenAI API key to use AI features');
       return;
     }
     
     if (!freeFormInput.trim()) {
-      alert('Please enter a natural language rule');
+      setAiError('Please enter a natural language rule');
       return;
     }
     
     setIsLoadingAI(true);
+    setAiError(null);
     try {
       const parsedRule = await aiService.parseRule(freeFormInput, { clients, workers, tasks }, apiKey);
       
@@ -299,10 +325,13 @@ export default function Home() {
       setFreeFormInput("");
       setLastModified({ rules: new Date() });
       
-      alert(`Rule parsed successfully! Type: ${parsedRule.type}`);
+      // Show success message
+      setAiError(`✅ Rule parsed successfully! Type: ${parsedRule.type}`);
+      setTimeout(() => setAiError(null), 3000);
     } catch (error) {
       console.error('Failed to parse rule:', error);
-      alert('Failed to parse natural language rule. Please check your API key and try again.');
+      const errorMessage = error instanceof Error ? error.message : 'Failed to parse natural language rule';
+      setAiError(errorMessage);
     } finally {
       setIsLoadingAI(false);
     }
@@ -532,6 +561,35 @@ export default function Home() {
               </div>
             )}
           </div>
+          
+          {/* AI Error Display */}
+          {aiError && (
+            <div className={`p-4 rounded-xl border ${aiError.startsWith('✅') ? 'bg-green-900/20 border-green-800/30' : 'bg-red-900/20 border-red-800/30'}`}>
+              <div className="flex items-start gap-3">
+                <div className={`w-5 h-5 rounded-full flex items-center justify-center ${aiError.startsWith('✅') ? 'bg-green-500' : 'bg-red-500'}`}>
+                  {aiError.startsWith('✅') ? (
+                    <span className="text-white text-xs">✓</span>
+                  ) : (
+                    <span className="text-white text-xs">!</span>
+                  )}
+                </div>
+                <div className="flex-1">
+                  <div className={`text-sm font-medium ${aiError.startsWith('✅') ? 'text-green-300' : 'text-red-300'}`}>
+                    {aiError.startsWith('✅') ? 'Success' : 'AI Error'}
+                  </div>
+                  <div className="text-gray-300 text-sm mt-1">
+                    {aiError.startsWith('✅') ? aiError.substring(1) : aiError}
+                  </div>
+                </div>
+                <button
+                  onClick={() => setAiError(null)}
+                  className="text-gray-400 hover:text-gray-300 transition-colors"
+                >
+                  <span className="text-lg">×</span>
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
       <section className="w-full max-w-6xl flex flex-col gap-8">
