@@ -38,6 +38,23 @@ function parsePhases(phaseStr: string): number[] {
   return [];
 }
 
+// Helper function to validate JSON format
+function isValidJSON(str: string): boolean {
+  try {
+    JSON.parse(str);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// Helper function to validate task ID format
+function isValidTaskID(taskID: string): boolean {
+  // Task IDs should follow pattern T followed by numbers (e.g., T1, T17, T99)
+  // But we'll flag obviously invalid ones like TX
+  return /^T\d+$/.test(taskID);
+}
+
 export function validateData(
   clients: DataRow[] | null,
   workers: DataRow[] | null,
@@ -223,18 +240,16 @@ export function validateData(
   // 5. Broken JSON validation (AttributesJSON)
   if (clients && clients.length > 0) {
     clients.forEach((row, i) => {
-      try {
-        if (row.AttributesJSON && typeof row.AttributesJSON === 'string') {
-          JSON.parse(row.AttributesJSON);
+      if (row.AttributesJSON && typeof row.AttributesJSON === 'string') {
+        if (!isValidJSON(row.AttributesJSON)) {
+          errors.push({ 
+            entity: 'clients', 
+            rowIndex: i, 
+            column: 'AttributesJSON', 
+            message: 'Malformed JSON in AttributesJSON (should be valid JSON format)',
+            severity: 'error'
+          });
         }
-      } catch {
-        errors.push({ 
-          entity: 'clients', 
-          rowIndex: i, 
-          column: 'AttributesJSON', 
-          message: 'Malformed JSON in AttributesJSON',
-          severity: 'error'
-        });
       }
     });
   }
@@ -251,6 +266,24 @@ export function validateData(
             rowIndex: i, 
             column: 'RequestedTaskIDs', 
             message: `Unknown TaskID referenced: ${taskId}`,
+            severity: 'error'
+          });
+        }
+      });
+    });
+  }
+
+  // 6.5. Invalid TaskID format validation (based on sample data patterns)
+  if (clients && clients.length > 0) {
+    clients.forEach((row, i) => {
+      const requestedTasks = (row.RequestedTaskIDs as string || '').split(',').map((id: string) => id.trim()).filter(Boolean);
+      requestedTasks.forEach((taskId: string) => {
+        if (!isValidTaskID(taskId)) {
+          errors.push({ 
+            entity: 'clients', 
+            rowIndex: i, 
+            column: 'RequestedTaskIDs', 
+            message: `Invalid TaskID format: ${taskId} (should be T followed by numbers)`,
             severity: 'error'
           });
         }
@@ -380,6 +413,89 @@ export function validateData(
           rowIndex: i, 
           column: 'PreferredPhases', 
           message: 'Invalid PreferredPhases format (use JSON array, range like "1-3", or comma-separated list)',
+          severity: 'error'
+        });
+      }
+    });
+  }
+
+  // 13. Business logic validations based on sample data patterns
+  
+  // 13.1. GroupTag validation (ensure consistent group naming)
+  if (clients && clients.length > 0) {
+    const validGroups = new Set(['GroupA', 'GroupB', 'GroupC']);
+    clients.forEach((row, i) => {
+      const group = row.GroupTag as string;
+      if (group && !validGroups.has(group)) {
+        errors.push({ 
+          entity: 'clients', 
+          rowIndex: i, 
+          column: 'GroupTag', 
+          message: `Invalid GroupTag: ${group} (should be GroupA, GroupB, or GroupC)`,
+          severity: 'warning'
+        });
+      }
+    });
+  }
+
+  // 13.2. Client name validation (ensure no empty or invalid names)
+  if (clients && clients.length > 0) {
+    clients.forEach((row, i) => {
+      const name = row.ClientName as string;
+      if (!name || name.trim().length === 0) {
+        errors.push({ 
+          entity: 'clients', 
+          rowIndex: i, 
+          column: 'ClientName', 
+          message: 'ClientName cannot be empty',
+          severity: 'error'
+        });
+      }
+    });
+  }
+
+  // 13.3. Task ID format validation for tasks
+  if (tasks && tasks.length > 0) {
+    tasks.forEach((row, i) => {
+      const taskId = row.TaskID as string;
+      if (!isValidTaskID(taskId)) {
+        errors.push({ 
+          entity: 'tasks', 
+          rowIndex: i, 
+          column: 'TaskID', 
+          message: `Invalid TaskID format: ${taskId} (should be T followed by numbers)`,
+          severity: 'error'
+        });
+      }
+    });
+  }
+
+  // 13.4. Worker ID format validation
+  if (workers && workers.length > 0) {
+    workers.forEach((row, i) => {
+      const workerId = row.WorkerID as string;
+      if (!/^W\d+$/.test(workerId)) {
+        errors.push({ 
+          entity: 'workers', 
+          rowIndex: i, 
+          column: 'WorkerID', 
+          message: `Invalid WorkerID format: ${workerId} (should be W followed by numbers)`,
+          severity: 'error'
+        });
+      }
+    });
+  }
+
+  // 13.5. Client ID format validation
+  if (clients && clients.length > 0) {
+    clients.forEach((row, i) => {
+      const clientId = row.ClientID as string;
+      if (!/^C\d+$/.test(clientId)) {
+        errors.push({ 
+          entity: 'clients', 
+          rowIndex: i, 
+          column: 'ClientID', 
+          message: `Invalid ClientID format: ${clientId} (should be C followed by numbers)`,
           severity: 'error'
         });
       }
