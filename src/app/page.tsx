@@ -3,7 +3,7 @@
 import { useState, useMemo, useEffect } from "react";
 import * as XLSX from "xlsx";
 import Papa from "papaparse";
-import { DataGrid, GridColDef, GridRowsProp } from "@mui/x-data-grid";
+import { DataGrid, GridColDef } from "@mui/x-data-grid";
 import { validateData, ValidationError } from "./validation";
 import Slider from '@mui/material/Slider';
 import FileSaver from 'file-saver';
