@@ -388,7 +388,7 @@ export default function Home() {
           </div>
         )}
         {/* Data Tables */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-8">
+        <div className="flex flex-col gap-8">
           {/* Clients Data */}
           <div className="bg-white/10 backdrop-blur-md rounded-2xl shadow-xl p-4 border border-white/20 flex flex-col">
             <div className="flex items-center justify-between mb-6">
