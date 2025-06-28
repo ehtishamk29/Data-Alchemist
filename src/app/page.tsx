@@ -13,13 +13,18 @@ import { HiOutlineUpload } from 'react-icons/hi';
 import { Plus, Trash2, Settings, BarChart3, Users, Search, Upload, Download, FileText, Database, Table } from 'lucide-react';
 import { AlertTriangle, CheckCircle, XCircle } from 'lucide-react';
 
-function parseFile(file: File, cb: (data: any[]) => void) {
+// Type for data rows
+interface DataRow {
+  [key: string]: string | number | boolean | object;
+}
+
+function parseFile(file: File, cb: (data: DataRow[]) => void) {
   const ext = file.name.split(".").pop()?.toLowerCase();
   if (ext === "csv") {
     Papa.parse(file, {
       header: true,
       skipEmptyLines: true,
-      complete: (results: Papa.ParseResult<any>) => cb(results.data as any[]),
+      complete: (results: Papa.ParseResult<DataRow>) => cb(results.data as DataRow[]),
     });
   } else if (ext === "xlsx") {
     const reader = new FileReader();
@@ -28,13 +33,13 @@ function parseFile(file: File, cb: (data: any[]) => void) {
       const workbook = XLSX.read(data, { type: "array" });
       const sheet = workbook.Sheets[workbook.SheetNames[0]];
       const json = XLSX.utils.sheet_to_json(sheet, { defval: "" });
-      cb(json as any[]);
+      cb(json as DataRow[]);
     };
     reader.readAsArrayBuffer(file);
   }
 }
 
-function getColumns(data: any[]): GridColDef[] {
+function getColumns(data: DataRow[]): GridColDef[] {
   if (!data || data.length === 0) return [];
   return Object.keys(data[0]).map((key) => ({
     field: key,
@@ -45,42 +50,30 @@ function getColumns(data: any[]): GridColDef[] {
   }));
 }
 
-function getRows(data: any[]): GridRowsProp {
+function getRows(data: DataRow[]): GridRowsProp {
   return data.map((row, i) => ({ id: i, ...row }));
 }
 
-// Rule types
-const RULE_TYPES = [
-  { value: "coRun", label: "Co-run (select TaskIDs)" },
-  { value: "slotRestriction", label: "Slot-restriction (ClientGroup/WorkerGroup + minCommonSlots)" },
-  { value: "loadLimit", label: "Load-limit (WorkerGroup + maxSlotsPerPhase)" },
-  { value: "phaseWindow", label: "Phase-window (TaskID + allowed phase list/range)" },
-  { value: "patternMatch", label: "Pattern-match (regex + rule template + params)" },
-  { value: "precedenceOverride", label: "Precedence override (global/specific rules with priority order)" },
-  { value: "freeForm", label: "Free-form (Natural Language)" },
-];
-
 // Helper to add id property for DataGrid
-function withRowId(data: any[] | null, entity: 'clients' | 'workers' | 'tasks') {
+function withRowId(data: DataRow[] | null, entity: 'clients' | 'workers' | 'tasks') {
   if (!data) return [];
   const idField = entity === 'clients' ? 'ClientID' : entity === 'workers' ? 'WorkerID' : 'TaskID';
   return data.map(row => ({ ...row, id: row[idField] }));
 }
 
-// Update filtered state type
 type FilteredState = {
-  clients: any[] | null;
-  workers: any[] | null;
-  tasks: any[] | null;
+  clients: DataRow[] | null;
+  workers: DataRow[] | null;
+  tasks: DataRow[] | null;
 };
 
 export default function Home() {
-  const [apiKey, setApiKey] = useState("");
-  const [clients, setClients] = useState<any[] | null>(null);
-  const [workers, setWorkers] = useState<any[] | null>(null);
-  const [tasks, setTasks] = useState<any[] | null>(null);
+  const [apiKey] = useState("");
+  const [clients, setClients] = useState<DataRow[] | null>(null);
+  const [workers, setWorkers] = useState<DataRow[] | null>(null);
+  const [tasks, setTasks] = useState<DataRow[] | null>(null);
   const [validationErrors, setValidationErrors] = useState<ValidationError[]>([]);
-  const [rules, setRules] = useState<any[]>([]);
+  const [rules, setRules] = useState<DataRow[]>([]);
   const [ruleType, setRuleType] = useState("coRun");
   const [ruleInput, setRuleInput] = useState("");
   const [freeFormInput, setFreeFormInput] = useState("");
@@ -94,30 +87,28 @@ export default function Home() {
   const [search, setSearch] = useState({ clients: '', workers: '', tasks: '' });
   const [modify, setModify] = useState({ clients: '', workers: '', tasks: '' });
   const [filtered, setFiltered] = useState<FilteredState>({ clients: null, workers: null, tasks: null });
-  const [parsedRule, setParsedRule] = useState<any>(null);
+  const [parsedRule, setParsedRule] = useState<DataRow | null>(null);
   const [ruleSuggestions, setRuleSuggestions] = useState<any[]>([]);
 
-  // Run validations whenever data changes
   useEffect(() => {
     setValidationErrors(validateData(clients, workers, tasks));
   }, [clients, workers, tasks]);
 
-  // Debug: Log clients and validation errors to the console
   useEffect(() => {
-    console.log('Clients:', clients);
-    console.log('Validation Errors:', validationErrors);
+    // Debug: Log clients and validation errors to the console
+    // console.log('Clients:', clients);
+    // console.log('Validation Errors:', validationErrors);
   }, [clients, validationErrors]);
 
-  // AI header mapping on upload
-  const handleFile = (entitySetter: (data: any[]) => void, entity: 'clients' | 'workers' | 'tasks') => async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFile = (entitySetter: (data: DataRow[]) => void, entity: 'clients' | 'workers' | 'tasks') => async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      parseFile(file, async (raw: any[]) => {
+      parseFile(file, async (raw: DataRow[]) => {
         if (!raw.length) return entitySetter([]);
         const mappedHeaders = await aiService.mapHeaders(Object.keys(raw[0]), entity, apiKey);
         const mapped = raw.map(row => {
-          const newRow: any = {};
-          mappedHeaders.forEach((h, i) => newRow[h] = row[Object.keys(row)[i]]);
+          const newRow: DataRow = {};
+          mappedHeaders.forEach((h, i) => newRow[h] = row[Object.keys(row)[i]] ?? '');
           return newRow;
         });
         entitySetter(mapped);
@@ -125,10 +116,9 @@ export default function Home() {
     }
   };
 
-  // AI search/filter
   useEffect(() => {
     async function doFilter() {
-      const newFiltered = {
+      const newFiltered: FilteredState = {
         clients: clients,
         workers: workers,
         tasks: tasks,
@@ -147,40 +137,19 @@ export default function Home() {
     doFilter();
   }, [search, clients, workers, tasks, apiKey]);
 
-  // AI data modification
   const handleModify = async (entity: 'clients' | 'workers' | 'tasks') => {
     if (!modify[entity]) return;
-    let newData = await aiService.modifyData(modify[entity], (entity === 'clients' ? clients : entity === 'workers' ? workers : tasks) || [], apiKey);
+    const newData = await aiService.modifyData(modify[entity], (entity === 'clients' ? clients : entity === 'workers' ? workers : tasks) || [], apiKey);
     if (entity === 'clients') setClients(newData);
     if (entity === 'workers') setWorkers(newData);
     if (entity === 'tasks') setTasks(newData);
     setModify(m => ({ ...m, [entity]: '' }));
   };
 
-  // AI rule parsing for free-form
-  const handleFreeFormRule = async () => {
-    if (!freeFormInput) return;
-    const parsed = await aiService.parseRule(freeFormInput, { clients, workers, tasks }, apiKey);
-    setParsedRule(parsed);
-  };
-
-  // Memoize columns and rows for performance
+  // Memoize columns for performance
   const clientsColumns = useMemo(() => getColumns(clients || []), [clients]);
   const workersColumns = useMemo(() => getColumns(workers || []), [workers]);
   const tasksColumns = useMemo(() => getColumns(tasks || []), [tasks]);
-
-  const clientsRows = useMemo(() => getRows(clients || []), [clients]);
-  const workersRows = useMemo(() => getRows(workers || []), [workers]);
-  const tasksRows = useMemo(() => getRows(tasks || []), [tasks]);
-
-  // Handle inline edit
-  const handleEdit = (setter: (data: any[]) => void, data: any[] | null) => (params: any) => {
-    if (!data) return;
-    const updated = [...data];
-    const idx = params.id;
-    updated[idx] = { ...updated[idx], [params.field]: params.value };
-    setter(updated);
-  };
 
   // Helper to check if a cell has an error
   function cellHasError(entity: 'clients' | 'workers' | 'tasks', rowIndex: number, field: string) {
@@ -198,18 +167,24 @@ export default function Home() {
   }
 
   // Add getCellClassName and renderCell to columns for error highlighting
-  function enhanceColumns(columns: GridColDef[], entity: 'clients' | 'workers' | 'tasks', data: any[] | null) {
+  function enhanceColumns(columns: GridColDef[], entity: 'clients' | 'workers' | 'tasks', data: DataRow[] | null) {
     return columns.map((col) => ({
       ...col,
-      getCellClassName: (params: any) =>
+      getCellClassName: (params: { id: number; field: string }) =>
         cellHasError(entity, params.id, col.field)
           ? "bg-red-100 text-red-700 font-semibold"
           : "",
-      renderCell: (params: any) => {
+      renderCell: (params: { value: unknown; id: number; field: string }) => {
+        let displayValue: string = '';
+        if (typeof params.value === 'object' && params.value !== null) {
+          displayValue = JSON.stringify(params.value);
+        } else if (params.value !== undefined && params.value !== null) {
+          displayValue = String(params.value);
+        }
         const error = cellErrorMessage(entity, params.id, col.field);
         return (
           <div>
-            {params.value}
+            {displayValue}
             {error && (
               <span className="block text-xs text-red-600 font-semibold">{error}</span>
             )}
@@ -219,14 +194,13 @@ export default function Home() {
     }));
   }
 
-  const clientsColumnsEnhanced = useMemo(() => enhanceColumns(clientsColumns, 'clients', clients), [clients, validationErrors]);
-  const workersColumnsEnhanced = useMemo(() => enhanceColumns(workersColumns, 'workers', workers), [workers, validationErrors]);
-  const tasksColumnsEnhanced = useMemo(() => enhanceColumns(tasksColumns, 'tasks', tasks), [tasks, validationErrors]);
+  const clientsColumnsEnhanced = useMemo(() => enhanceColumns(clientsColumns, 'clients', clients), [clientsColumns, clients, validationErrors]);
+  const workersColumnsEnhanced = useMemo(() => enhanceColumns(workersColumns, 'workers', workers), [workersColumns, workers, validationErrors]);
+  const tasksColumnsEnhanced = useMemo(() => enhanceColumns(tasksColumns, 'tasks', tasks), [tasksColumns, tasks, validationErrors]);
 
-  // Add rule handler
   function handleAddRule(e: React.FormEvent) {
     e.preventDefault();
-    let newRule: any = { type: ruleType, created: new Date().toISOString() };
+    const newRule: DataRow = { type: ruleType, created: new Date().toISOString() };
     if (ruleType === "freeForm") {
       newRule.description = freeFormInput;
     } else {
@@ -237,7 +211,6 @@ export default function Home() {
     setFreeFormInput("");
   }
 
-  // Remove rule handler
   function handleRemoveRule(idx: number) {
     setRules((prev) => prev.filter((_, i) => i !== idx));
   }
@@ -246,8 +219,7 @@ export default function Home() {
     setWeights((prev) => ({ ...prev, [key]: value }));
   }
 
-  // Export handlers
-  function exportCSV(data: any[], filename: string) {
+  function exportCSV(data: DataRow[], filename: string) {
     if (!data) return;
     const csv = Papa.unparse(data);
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
@@ -266,7 +238,7 @@ export default function Home() {
     setRuleSuggestions(suggestions);
   };
 
-  const handleAddSuggestedRule = (suggestion: any) => {
+  const handleAddSuggestedRule = (suggestion: DataRow) => {
     setRules(prev => [...prev, suggestion]);
     setRuleSuggestions(s => s.filter(r => r !== suggestion));
   };
@@ -687,64 +659,4 @@ export default function Home() {
             <button
               onClick={() => exportCSV(workers || [], 'workers.csv')}
               disabled={!workers}
-              className={`group p-6 bg-slate-700/30 hover:bg-slate-700/50 border border-slate-600/30 hover:border-green-500/50 rounded-2xl transition-all duration-300 hover:scale-105 hover:shadow-lg hover:shadow-green-500/10 ${!workers ? 'opacity-50 cursor-not-allowed' : ''}`}
-            >
-              <div className="flex items-center gap-4">
-                <div className="p-3 bg-green-500/20 rounded-xl group-hover:bg-green-500/30 transition-all duration-200">
-                  <Database className="text-green-400 group-hover:text-green-300" size={24} />
-                </div>
-                <div className="text-left">
-                  <h4 className="text-white font-semibold text-lg">Export Workers CSV</h4>
-                  <p className="text-gray-400 text-sm mt-1">Download your data as CSV/JSON</p>
-                </div>
-              </div>
-            </button>
-
-            <button
-              onClick={() => exportCSV(tasks || [], 'tasks.csv')}
-              disabled={!tasks}
-              className={`group p-6 bg-slate-700/30 hover:bg-slate-700/50 border border-slate-600/30 hover:border-purple-500/50 rounded-2xl transition-all duration-300 hover:scale-105 hover:shadow-lg hover:shadow-purple-500/10 ${!tasks ? 'opacity-50 cursor-not-allowed' : ''}`}
-            >
-              <div className="flex items-center gap-4">
-                <div className="p-3 bg-purple-500/20 rounded-xl group-hover:bg-purple-500/30 transition-all duration-200">
-                  <Table className="text-purple-400 group-hover:text-purple-300" size={24} />
-                </div>
-                <div className="text-left">
-                  <h4 className="text-white font-semibold text-lg">Export Tasks CSV</h4>
-                  <p className="text-gray-400 text-sm mt-1">Download your data as CSV/JSON</p>
-                </div>
-              </div>
-            </button>
-
-            <button
-              onClick={exportRulesAndWeights}
-              disabled={rules.length === 0}
-              className={`group p-6 bg-slate-700/30 hover:bg-slate-700/50 border border-slate-600/30 hover:border-orange-500/50 rounded-2xl transition-all duration-300 hover:scale-105 hover:shadow-lg hover:shadow-orange-500/10 ${rules.length === 0 ? 'opacity-50 cursor-not-allowed' : ''}`}
-            >
-              <div className="flex items-center gap-4">
-                <div className="p-3 bg-orange-500/20 rounded-xl group-hover:bg-orange-500/30 transition-all duration-200">
-                  <Download className="text-orange-400 group-hover:text-orange-300" size={24} />
-                </div>
-                <div className="text-left">
-                  <h4 className="text-white font-semibold text-lg">Export Rules & Weights (rules.json)</h4>
-                  <p className="text-gray-400 text-sm mt-1">Download your data as CSV/JSON</p>
-                </div>
-              </div>
-            </button>
-          </div>
-
-          <div className="mt-8 p-6 bg-gradient-to-r from-purple-500/10 to-blue-500/10 rounded-2xl border border-purple-500/20">
-            <h4 className="text-white font-semibold text-lg mb-3">📋 Export Instructions</h4>
-            <ul className="text-gray-300 space-y-2 text-sm">
-              <li>• <strong>CSV files</strong> can be opened in Excel or Google Sheets</li>
-              <li>• <strong>JSON files</strong> contain your rules and configuration settings</li>
-              <li>• All exports include timestamp and version information</li>
-              <li>• Data is formatted for easy integration with other systems</li>
-            </ul>
-          </div>
-        </div>
-      </section>
-      <footer className="mt-10 text-sm text-blue-400">&copy; {new Date().getFullYear()} Data Alchemist</footer>
-    </div>
-  );
-}
+              className={`
