@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useEffect } from "react";
 import * as XLSX from "xlsx";
 import Papa from "papaparse";
 import { DataGrid, GridColDef } from "@mui/x-data-grid";
@@ -36,17 +36,6 @@ function parseFile(file: File, cb: (data: DataRow[]) => void) {
     };
     reader.readAsArrayBuffer(file);
   }
-}
-
-function getColumns(data: DataRow[]): GridColDef[] {
-  if (!data || data.length === 0) return [];
-  return Object.keys(data[0]).map((key) => ({
-    field: key,
-    headerName: key,
-    width: 180,
-    editable: true,
-    flex: 1,
-  }));
 }
 
 // Helper to add id property for DataGrid
@@ -253,7 +242,17 @@ export default function Home() {
     }
   };
 
-  const handleApplyCorrection = (entity: 'clients' | 'workers' | 'tasks', correction: any) => {
+  const handleApplyCorrection = (
+    entity: 'clients' | 'workers' | 'tasks',
+    correction: {
+      rowIndex: number;
+      column: string;
+      currentValue: string | number | boolean | object;
+      suggestedValue: string | number | boolean | object;
+      reason: string;
+      confidence: number;
+    }
+  ) => {
     const data = entity === 'clients' ? clients : entity === 'workers' ? workers : tasks;
     if (!data) return;
     
