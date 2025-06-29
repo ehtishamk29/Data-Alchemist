@@ -53,6 +53,8 @@ type FilteredState = {
 
 export default function Home() {
   const [apiKey, setApiKey] = useState("");
+  const [apiKeyError, setApiKeyError] = useState<string | null>(null);
+  const [isValidatingApiKey, setIsValidatingApiKey] = useState(false);
   const [clients, setClients] = useState<DataRow[] | null>(null);
   const [workers, setWorkers] = useState<DataRow[] | null>(null);
   const [tasks, setTasks] = useState<DataRow[] | null>(null);
@@ -88,6 +90,63 @@ export default function Home() {
   }> }>({});
   const [isLoadingAI, setIsLoadingAI] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
+
+  // Validate API key when it changes
+  const validateApiKey = async (key: string) => {
+    if (!key.trim()) {
+      setApiKeyError(null);
+      return;
+    }
+
+    // Basic format validation
+    if (!key.startsWith('sk-') || key.length < 20) {
+      setApiKeyError('Invalid API key format. API key should start with "sk-" and be at least 20 characters long.');
+      return;
+    }
+
+    setIsValidatingApiKey(true);
+    setApiKeyError(null);
+
+    try {
+      // Test the API key with a simple request
+      const response = await fetch('https://api.openai.com/v1/models', {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${key}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (response.status === 401) {
+        setApiKeyError('Invalid API key. Please check your OpenAI API key and try again.');
+      } else if (response.status === 429) {
+        setApiKeyError('Rate limit exceeded. Please wait a moment and try again.');
+      } else if (response.status === 403) {
+        setApiKeyError('Access denied. Please check your OpenAI account status and billing.');
+      } else if (!response.ok) {
+        setApiKeyError(`API key validation failed. Status: ${response.status}`);
+      } else {
+        setApiKeyError(null); // API key is valid
+      }
+    } catch (error) {
+      setApiKeyError('Failed to validate API key. Please check your internet connection and try again.');
+    } finally {
+      setIsValidatingApiKey(false);
+    }
+  };
+
+  // Validate API key when it changes
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      if (apiKey) {
+        validateApiKey(apiKey);
+      } else {
+        setApiKeyError(null);
+      }
+    }, 1000); // Debounce validation
+
+    return () => clearTimeout(timeoutId);
+  }, [apiKey]);
 
   useEffect(() => {
     setValidationErrors(validateData(clients, workers, tasks));
@@ -637,19 +696,69 @@ export default function Home() {
               value={apiKey}
               onChange={e => setApiKey(e.target.value)}
               placeholder="sk-... (Enter your OpenAI API key to enable AI features)"
-              className="w-full p-3 bg-slate-700/50 border border-slate-600/50 rounded-xl text-white placeholder-gray-400 focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all duration-200"
+              className={`w-full p-3 bg-slate-700/50 border rounded-xl text-white placeholder-gray-400 focus:ring-2 focus:border-transparent transition-all duration-200 ${
+                apiKeyError ? 'border-red-500 focus:ring-red-500' : 'border-slate-600/50 focus:ring-green-500'
+              }`}
             />
             <p className="text-gray-400 text-xs mt-1">
               💡 Your API key is stored locally and never sent to our servers. AI features include header mapping, natural language search, rule parsing, and data corrections.
             </p>
+            {/* API Key Validation Error */}
+            {apiKeyError && (
+              <div className="mt-2 p-3 bg-red-900/20 border border-red-800/30 rounded-lg">
+                <div className="flex items-start gap-2">
+                  <div className="w-4 h-4 bg-red-500 rounded-full flex items-center justify-center mt-0.5">
+                    <span className="text-white text-xs">!</span>
+                  </div>
+                  <div className="flex-1">
+                    <div className="text-red-300 text-sm font-medium">API Key Error</div>
+                    <div className="text-red-200 text-xs mt-1">{apiKeyError}</div>
+                  </div>
+                </div>
+              </div>
+            )}
+            {/* API Key Validation Loading */}
+            {isValidatingApiKey && (
+              <div className="mt-2 p-3 bg-blue-900/20 border border-blue-800/30 rounded-lg">
+                <div className="flex items-center gap-2">
+                  <div className="w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin"></div>
+                  <span className="text-blue-300 text-sm">Validating API key...</span>
+                </div>
+              </div>
+            )}
           </div>
           
           {/* AI Status */}
           <div className="flex items-center gap-4">
-            <div className={`flex items-center gap-2 px-3 py-2 rounded-lg ${apiKey ? 'bg-green-500/20 border border-green-500/30' : 'bg-gray-500/20 border border-gray-500/30'}`}>
-              <div className={`w-2 h-2 rounded-full ${apiKey ? 'bg-green-400' : 'bg-gray-400'}`}></div>
-              <span className={`text-sm font-medium ${apiKey ? 'text-green-300' : 'text-gray-400'}`}>
-                {apiKey ? 'AI Features Enabled' : 'AI Features Disabled'}
+            <div className={`flex items-center gap-2 px-3 py-2 rounded-lg ${
+              apiKey && !apiKeyError && !isValidatingApiKey 
+                ? 'bg-green-500/20 border border-green-500/30' 
+                : Boolean(apiKeyError)
+                ? 'bg-red-500/20 border border-red-500/30'
+                : 'bg-gray-500/20 border border-gray-500/30'
+            }`}>
+              <div className={`w-2 h-2 rounded-full ${
+                apiKey && !apiKeyError && !isValidatingApiKey 
+                  ? 'bg-green-400' 
+                  : Boolean(apiKeyError)
+                  ? 'bg-red-400'
+                  : 'bg-gray-400'
+              }`}></div>
+              <span className={`text-sm font-medium ${
+                apiKey && !apiKeyError && !isValidatingApiKey 
+                  ? 'text-green-300' 
+                  : Boolean(apiKeyError)
+                  ? 'text-red-300'
+                  : 'text-gray-400'
+              }`}>
+                {isValidatingApiKey 
+                  ? 'Validating API Key...' 
+                  : Boolean(apiKeyError)
+                  ? 'AI Features Disabled (Invalid Key)'
+                  : apiKey 
+                  ? 'AI Features Enabled' 
+                  : 'AI Features Disabled'
+                }
               </span>
             </div>
             {isLoadingAI && (
@@ -767,7 +876,7 @@ export default function Home() {
               {ruleType === "freeForm" && (
                 <button
                   onClick={handleParseNaturalLanguageRule}
-                  disabled={!apiKey || !freeFormInput.trim() || isLoadingAI}
+                  disabled={!apiKey || Boolean(apiKeyError) || !freeFormInput.trim() || isLoadingAI}
                   className="flex items-center gap-2 px-6 py-3 bg-green-600 hover:bg-green-500 text-white rounded-xl font-medium transition-all duration-200 shadow-lg hover:shadow-green-500/25 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" style={{ display: isLoadingAI ? 'block' : 'none' }}></div>
@@ -776,7 +885,7 @@ export default function Home() {
               )}
               <button
                 onClick={handleGetRuleSuggestions}
-                disabled={!apiKey || (!clients && !workers && !tasks) || isLoadingAI}
+                disabled={!apiKey || Boolean(apiKeyError) || (!clients && !workers && !tasks) || isLoadingAI}
                 className="px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-medium transition-all duration-200 shadow-lg hover:shadow-blue-500/25 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Get AI Rule Recommendations
@@ -1007,7 +1116,7 @@ export default function Home() {
                 <>
                   <button 
                     onClick={() => handleGetDataCorrections('clients')}
-                    disabled={!apiKey || isLoadingAI}
+                    disabled={!apiKey || Boolean(apiKeyError) || isLoadingAI}
                     className="px-6 py-3 bg-green-600 hover:bg-green-500 text-white rounded-xl transition-all duration-200 flex items-center gap-2 shadow-lg hover:shadow-green-500/25 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" style={{ display: isLoadingAI ? 'block' : 'none' }}></div>
@@ -1015,7 +1124,7 @@ export default function Home() {
                   </button>
                   <button 
                     onClick={() => handleRunAIValidation('clients')}
-                    disabled={!apiKey || isLoadingAI}
+                    disabled={!apiKey || Boolean(apiKeyError) || isLoadingAI}
                     className="px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl transition-all duration-200 flex items-center gap-2 shadow-lg hover:shadow-blue-500/25 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" style={{ display: isLoadingAI ? 'block' : 'none' }}></div>
@@ -1175,7 +1284,7 @@ export default function Home() {
                 <>
                   <button 
                     onClick={() => handleGetDataCorrections('workers')}
-                    disabled={!apiKey || isLoadingAI}
+                    disabled={!apiKey || Boolean(apiKeyError) || isLoadingAI}
                     className="px-6 py-3 bg-green-600 hover:bg-green-500 text-white rounded-xl transition-all duration-200 flex items-center gap-2 shadow-lg hover:shadow-green-500/25 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" style={{ display: isLoadingAI ? 'block' : 'none' }}></div>
@@ -1183,7 +1292,7 @@ export default function Home() {
                   </button>
                   <button 
                     onClick={() => handleRunAIValidation('workers')}
-                    disabled={!apiKey || isLoadingAI}
+                    disabled={!apiKey || Boolean(apiKeyError) || isLoadingAI}
                     className="px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl transition-all duration-200 flex items-center gap-2 shadow-lg hover:shadow-blue-500/25 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" style={{ display: isLoadingAI ? 'block' : 'none' }}></div>
@@ -1343,7 +1452,7 @@ export default function Home() {
                 <>
                   <button 
                     onClick={() => handleGetDataCorrections('tasks')}
-                    disabled={!apiKey || isLoadingAI}
+                    disabled={!apiKey || Boolean(apiKeyError) || isLoadingAI}
                     className="px-6 py-3 bg-green-600 hover:bg-green-500 text-white rounded-xl transition-all duration-200 flex items-center gap-2 shadow-lg hover:shadow-green-500/25 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" style={{ display: isLoadingAI ? 'block' : 'none' }}></div>
@@ -1351,7 +1460,7 @@ export default function Home() {
                   </button>
                   <button 
                     onClick={() => handleRunAIValidation('tasks')}
-                    disabled={!apiKey || isLoadingAI}
+                    disabled={!apiKey || Boolean(apiKeyError) || isLoadingAI}
                     className="px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl transition-all duration-200 flex items-center gap-2 shadow-lg hover:shadow-blue-500/25 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" style={{ display: isLoadingAI ? 'block' : 'none' }}></div>
