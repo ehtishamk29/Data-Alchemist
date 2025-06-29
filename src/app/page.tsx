@@ -1547,7 +1547,7 @@ export default function Home() {
           </div>
         </div>
       </section>
-      <footer className="mt-10 text-sm text-blue-400">&copy; 2024 Data Alchemist</footer>
+      <footer className="mt-10 text-sm text-blue-400">&copy; 2025 Data Alchemist</footer>
     </div>
   );
 }
