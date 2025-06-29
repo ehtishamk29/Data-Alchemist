@@ -128,7 +128,7 @@ export default function Home() {
       } else {
         setApiKeyError(null); // API key is valid
       }
-    } catch (error) {
+    } catch {
       setApiKeyError('Failed to validate API key. Please check your internet connection and try again.');
     } finally {
       setIsValidatingApiKey(false);
